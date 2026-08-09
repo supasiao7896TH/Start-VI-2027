@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Start VI 2027 — Stock Ledger</title>
+  <meta name="description" content="Personal Thai-stock investment ledger — by Supasit.A" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@400;500;700&display=swap" rel="stylesheet" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { font-family: 'Noto Sans Thai', system-ui, sans-serif; }
+    .glass {
+      background: rgba(255, 255, 255, 0.65);
+      backdrop-filter: blur(20px) saturate(180%);
+      -webkit-backdrop-filter: blur(20px) saturate(180%);
+    }
+  </style>
+</head>
+<body class="min-h-screen bg-gradient-to-br from-slate-100 to-slate-200 text-slate-800">
+  <div class="max-w-5xl mx-auto px-4 py-8 space-y-6">
+    <header>
+      <h1 class="text-2xl font-bold">Start VI 2027 <span class="text-base font-normal text-slate-500">— Stock Ledger</span></h1>
+      <p class="text-sm text-slate-500">A-Class WebCraft · Code • Share • Inspire · by Supasit.A</p>
+    </header>
+
+    <div id="error-banner" class="hidden rounded-2xl bg-red-50 border border-red-200 text-red-700 px-4 py-3 text-sm"></div>
+
+    <section class="glass rounded-2xl shadow p-5">
+      <h2 class="font-semibold mb-4" id="form-title">บันทึกรายการใหม่</h2>
+      <form id="transaction-form" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <input type="hidden" name="id" />
+
+        <label class="flex flex-col gap-1 text-sm">
+          วันที่
+          <input type="date" name="date" required class="rounded-xl border border-slate-300 px-3 py-2" />
+        </label>
+
+        <label class="flex flex-col gap-1 text-sm">
+          ประเภทรายการ
+          <select name="type" required class="rounded-xl border border-slate-300 px-3 py-2">
+            <option value="BUY">ซื้อ (Buy)</option>
+            <option value="SELL">ขาย (Sell)</option>
+            <option value="CASH_DIVIDEND">รับปันผลเงินสด (Cash Dividend)</option>
+            <option value="CASH_DEPOSIT_WITHDRAWAL">ฝาก/ถอนเงิน (Cash Deposit/Withdrawal)</option>
+            <option value="MANUAL_ADJUSTMENT">ปรับยอดด้วยตนเอง (Manual Adjustment)</option>
+          </select>
+        </label>
+
+        <label data-for-types="BUY,SELL,CASH_DIVIDEND,MANUAL_ADJUSTMENT" class="flex flex-col gap-1 text-sm">
+          หุ้น (Symbol)
+          <input type="text" name="symbol" class="rounded-xl border border-slate-300 px-3 py-2 uppercase" placeholder="เช่น PTT" />
+        </label>
+
+        <label data-for-types="BUY,SELL" class="flex flex-col gap-1 text-sm">
+          จำนวนหุ้น
+          <input type="number" name="quantity" min="1" step="1" class="rounded-xl border border-slate-300 px-3 py-2" />
+        </label>
+
+        <label data-for-types="BUY" class="flex flex-col gap-1 text-sm">
+          เงินสดจ่ายสุทธิ (รวมค่าคอม/VAT แล้ว)
+          <input type="number" name="netCashOut" min="0.01" step="0.01" class="rounded-xl border border-slate-300 px-3 py-2" />
+        </label>
+
+        <label data-for-types="SELL,CASH_DIVIDEND" class="flex flex-col gap-1 text-sm">
+          เงินสดรับสุทธิ (SELL: รวมค่าคอม/VAT แล้ว · Dividend: หลังหักภาษี 10%)
+          <input type="number" name="netCashIn" min="0.01" step="0.01" class="rounded-xl border border-slate-300 px-3 py-2" />
+        </label>
+
+        <label data-for-types="CASH_DEPOSIT_WITHDRAWAL" class="flex flex-col gap-1 text-sm">
+          ทิศทาง
+          <select name="direction" class="rounded-xl border border-slate-300 px-3 py-2">
+            <option value="DEPOSIT">ฝากเงินเข้าพอร์ต (Deposit)</option>
+            <option value="WITHDRAWAL">ถอนเงินออกจากพอร์ต (Withdrawal)</option>
+          </select>
+        </label>
+
+        <label data-for-types="CASH_DEPOSIT_WITHDRAWAL" class="flex flex-col gap-1 text-sm">
+          จำนวนเงิน
+          <input type="number" name="amount" min="0.01" step="0.01" class="rounded-xl border border-slate-300 px-3 py-2" />
+        </label>
+
+        <label data-for-types="MANUAL_ADJUSTMENT" class="flex flex-col gap-1 text-sm">
+          จำนวนหุ้นใหม่ (เว้นว่างได้ถ้าไม่เปลี่ยน)
+          <input type="number" name="newQuantity" min="0" step="1" class="rounded-xl border border-slate-300 px-3 py-2" />
+        </label>
+
+        <label data-for-types="MANUAL_ADJUSTMENT" class="flex flex-col gap-1 text-sm">
+          ต้นทุนเฉลี่ยใหม่ (เว้นว่างได้ถ้าไม่เปลี่ยน)
+          <input type="number" name="newAverageCost" min="0" step="0.01" class="rounded-xl border border-slate-300 px-3 py-2" />
+        </label>
+
+        <label data-for-types="BUY,SELL,CASH_DIVIDEND,CASH_DEPOSIT_WITHDRAWAL,MANUAL_ADJUSTMENT" class="flex flex-col gap-1 text-sm sm:col-span-2">
+          หมายเหตุ (ไม่บังคับ)
+          <input type="text" name="note" class="rounded-xl border border-slate-300 px-3 py-2" />
+        </label>
+
+        <div class="sm:col-span-2 flex gap-3">
+          <button type="submit" class="rounded-xl bg-slate-800 text-white px-4 py-2 text-sm font-medium hover:bg-slate-700">บันทึก</button>
+          <button type="button" id="cancel-edit" class="hidden rounded-xl border border-slate-300 px-4 py-2 text-sm">ยกเลิกแก้ไข</button>
+        </div>
+      </form>
+    </section>
+
+    <section class="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div class="glass rounded-2xl shadow p-5">
+        <h2 class="font-semibold mb-3">Holdings (ปัจจุบัน)</h2>
+        <div id="holdings-table"></div>
+      </div>
+      <div class="glass rounded-2xl shadow p-5">
+        <h2 class="font-semibold mb-3">สรุปเงินสด</h2>
+        <div id="cash-summary"></div>
+      </div>
+    </section>
+
+    <section class="glass rounded-2xl shadow p-5">
+      <h2 class="font-semibold mb-3">Realized P&amp;L</h2>
+      <div id="realized-pnl-table"></div>
+    </section>
+
+    <section class="glass rounded-2xl shadow p-5">
+      <div class="flex items-center justify-between mb-3">
+        <h2 class="font-semibold">Ledger (รายการทั้งหมด)</h2>
+        <button id="export-json" class="rounded-xl border border-slate-300 px-3 py-1.5 text-sm hover:bg-white">Export to JSON</button>
+      </div>
+      <div id="ledger-table"></div>
+    </section>
+  </div>
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
