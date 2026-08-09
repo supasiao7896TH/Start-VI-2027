@@ -134,14 +134,16 @@
       </form>
     </section>
 
-    <section class="grid grid-cols-1 md:grid-cols-2 gap-6">
-      <div class="glass rounded-2xl shadow p-5">
+    <section class="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div class="glass rounded-2xl shadow p-5 md:col-span-2">
         <h2 class="font-semibold mb-3">Holdings (ปัจจุบัน)</h2>
         <div id="holdings-table"></div>
       </div>
       <div class="glass rounded-2xl shadow p-5">
         <h2 class="font-semibold mb-3">สรุปเงินสด</h2>
         <div id="cash-summary"></div>
+        <h2 class="font-semibold mt-5 mb-3">มูลค่าพอร์ต (ตามราคาล่าสุด)</h2>
+        <div id="portfolio-value-summary"></div>
       </div>
     </section>
 
@@ -180,6 +182,114 @@
       </div>
 
       <div id="ledger-table"></div>
+    </section>
+
+    <section class="glass rounded-2xl shadow p-5">
+      <h2 class="font-semibold mb-4" id="price-form-title">บันทึกราคาหุ้น (Price Snapshot)</h2>
+      <form id="price-form" class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <input type="hidden" name="id" />
+        <label class="flex flex-col gap-1 text-sm">
+          หุ้น (Symbol)
+          <input type="text" name="symbol" class="rounded-xl border border-slate-300 px-3 py-2 uppercase" placeholder="เช่น PTT" />
+        </label>
+        <label class="flex flex-col gap-1 text-sm">
+          ราคา (บาท)
+          <input type="number" name="price" min="0.01" step="0.01" class="rounded-xl border border-slate-300 px-3 py-2" />
+        </label>
+        <label class="flex flex-col gap-1 text-sm">
+          ณ วันที่
+          <input type="date" name="asOfDate" class="rounded-xl border border-slate-300 px-3 py-2" />
+        </label>
+        <label class="flex flex-col gap-1 text-sm sm:col-span-3">
+          หมายเหตุ (ไม่บังคับ)
+          <input type="text" name="note" class="rounded-xl border border-slate-300 px-3 py-2" />
+        </label>
+        <div class="sm:col-span-3 flex gap-3">
+          <button type="submit" class="rounded-xl bg-slate-800 text-white px-4 py-2 text-sm font-medium hover:bg-slate-700">บันทึกราคา</button>
+          <button type="button" id="price-cancel-edit" class="hidden rounded-xl border border-slate-300 px-4 py-2 text-sm">ยกเลิกแก้ไข</button>
+        </div>
+      </form>
+
+      <div class="flex items-center justify-between mt-6 mb-3">
+        <h3 class="font-semibold text-sm text-slate-600">ประวัติราคา</h3>
+        <input type="text" id="price-filter-symbol" placeholder="กรองตามหุ้น" class="rounded-xl border border-slate-300 px-3 py-1.5 text-sm" />
+      </div>
+      <div id="price-history-table"></div>
+    </section>
+
+    <section class="glass rounded-2xl shadow p-5">
+      <h2 class="font-semibold mb-4" id="scorecard-form-title">VI Scorecard &amp; Valuation</h2>
+      <form id="scorecard-form" class="space-y-5">
+        <input type="hidden" name="id" />
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <label class="flex flex-col gap-1 text-sm">
+            หุ้น (Symbol)
+            <input type="text" name="symbol" class="rounded-xl border border-slate-300 px-3 py-2 uppercase" placeholder="เช่น PTT" />
+          </label>
+          <label class="flex flex-col gap-1 text-sm">
+            วันที่ประเมิน
+            <input type="date" name="date" class="rounded-xl border border-slate-300 px-3 py-2" />
+          </label>
+          <label class="flex flex-col gap-1 text-sm">
+            ราคาปัจจุบัน (บาท)
+            <div class="flex gap-2">
+              <input type="number" name="currentPrice" min="0.01" step="0.01" class="rounded-xl border border-slate-300 px-3 py-2 flex-1" />
+              <button type="button" id="use-latest-price" class="rounded-xl border border-slate-300 px-3 text-xs text-slate-600 hover:bg-white whitespace-nowrap">ใช้ราคาล่าสุด</button>
+            </div>
+          </label>
+        </div>
+
+        <fieldset class="border border-slate-200 rounded-xl p-4">
+          <legend class="text-sm font-medium px-1">ข้อมูล Valuation (4 วิธี — vi-analysis §22.4)</legend>
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
+            <label class="flex flex-col gap-1">EPS (บาท/หุ้น)
+              <input type="number" name="eps" step="0.01" class="rounded-xl border border-slate-300 px-3 py-2" /></label>
+            <label class="flex flex-col gap-1">BVPS (บาท/หุ้น)
+              <input type="number" name="bvps" step="0.01" class="rounded-xl border border-slate-300 px-3 py-2" /></label>
+            <label class="flex flex-col gap-1">P/E เฉลี่ยกลุ่ม
+              <input type="number" name="peerAveragePE" step="0.01" class="rounded-xl border border-slate-300 px-3 py-2" /></label>
+            <label class="flex flex-col gap-1">FCF/หุ้น (บาท)
+              <input type="number" name="fcfPerShare" step="0.01" class="rounded-xl border border-slate-300 px-3 py-2" /></label>
+            <label class="flex flex-col gap-1">WACC (%)
+              <input type="number" name="wacc" step="0.01" placeholder="8-10" class="rounded-xl border border-slate-300 px-3 py-2" /></label>
+            <label class="flex flex-col gap-1">Growth 5 ปี (%)
+              <input type="number" name="growthRate5y" step="0.01" placeholder="3-5" class="rounded-xl border border-slate-300 px-3 py-2" /></label>
+            <label class="flex flex-col gap-1">Terminal Growth (%)
+              <input type="number" name="terminalGrowthRate" step="0.01" placeholder="2-3" class="rounded-xl border border-slate-300 px-3 py-2" /></label>
+            <label class="flex flex-col gap-1">Margin of Safety (%)
+              <input type="number" name="marginOfSafety" step="0.01" placeholder="30" class="rounded-xl border border-slate-300 px-3 py-2" /></label>
+            <label class="flex flex-col gap-1">DPS ปีหน้า (บาท)
+              <input type="number" name="dpsNextYear" step="0.01" class="rounded-xl border border-slate-300 px-3 py-2" /></label>
+            <label class="flex flex-col gap-1">Required Return (%)
+              <input type="number" name="requiredReturn" step="0.01" placeholder="8-10" class="rounded-xl border border-slate-300 px-3 py-2" /></label>
+            <label class="flex flex-col gap-1">Div Growth (%)
+              <input type="number" name="dividendGrowthRate" step="0.01" placeholder="2-4" class="rounded-xl border border-slate-300 px-3 py-2" /></label>
+          </div>
+          <div id="valuation-summary" class="mt-4 text-sm"></div>
+        </fieldset>
+
+        <fieldset class="border border-slate-200 rounded-xl p-4">
+          <legend class="text-sm font-medium px-1">VI Scorecard /30 (vi-analysis §22.5)</legend>
+          <div id="scorecard-checklist"></div>
+          <div id="scorecard-total" class="mt-3 text-sm font-semibold"></div>
+        </fieldset>
+
+        <label class="flex flex-col gap-1 text-sm">
+          หมายเหตุ (ไม่บังคับ)
+          <input type="text" name="note" class="rounded-xl border border-slate-300 px-3 py-2" />
+        </label>
+
+        <div class="flex gap-3">
+          <button type="submit" class="rounded-xl bg-slate-800 text-white px-4 py-2 text-sm font-medium hover:bg-slate-700">บันทึก Scorecard</button>
+          <button type="button" id="scorecard-cancel-edit" class="hidden rounded-xl border border-slate-300 px-4 py-2 text-sm">ยกเลิกแก้ไข</button>
+        </div>
+      </form>
+
+      <div class="flex items-center justify-between mt-6 mb-3">
+        <h3 class="font-semibold text-sm text-slate-600">ประวัติ Scorecard</h3>
+        <input type="text" id="scorecard-filter-symbol" placeholder="กรองตามหุ้น" class="rounded-xl border border-slate-300 px-3 py-1.5 text-sm" />
+      </div>
+      <div id="scorecard-history-table"></div>
     </section>
   </div>
 

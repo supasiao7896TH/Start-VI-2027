@@ -28,5 +28,11 @@ export const STATE_STORE = createStore({
   editingId: null,
   error: null,
   // UI-only filter for the Ledger table — never affects computed (Holdings/Realized P&L/Cash Summary).
-  ledgerFilter: { symbol: '', type: 'ALL', dateFrom: '', dateTo: '' }
+  ledgerFilter: { symbol: '', type: 'ALL', dateFrom: '', dateTo: '' },
+  // Full Price Snapshot history, loaded from PRICE_STORAGE.
+  priceSnapshots: [],
+  // Full VI Scorecard entry history, loaded from SCORECARD_STORAGE.
+  scorecards: [],
+  // UI-only filter for the Scorecard history table.
+  scorecardFilter: { symbol: '' }
 });

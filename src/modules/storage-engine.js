@@ -1,35 +1,5 @@
 import { APP_CONFIG } from './app-config.js';
-
-let dbPromise = null;
-
-function openDB() {
-  if (dbPromise) return dbPromise;
-  dbPromise = new Promise((resolve, reject) => {
-    const request = indexedDB.open(APP_CONFIG.DB_NAME, APP_CONFIG.DB_VERSION);
-    request.onupgradeneeded = () => {
-      const db = request.result;
-      if (!db.objectStoreNames.contains(APP_CONFIG.STORE_NAME)) {
-        const store = db.createObjectStore(APP_CONFIG.STORE_NAME, {
-          keyPath: 'id',
-          autoIncrement: true
-        });
-        store.createIndex('by_date', 'date');
-        store.createIndex('by_symbol', 'symbol');
-        store.createIndex('by_type', 'type');
-      }
-    };
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error);
-  });
-  return dbPromise;
-}
-
-function promisifyRequest(request) {
-  return new Promise((resolve, reject) => {
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error);
-  });
-}
+import { openDB, promisifyRequest } from './db.js';
 
 /** Promise-based IndexedDB wrapper. The `transactions` store is the only Ledger — Holdings/Realized P&L are computed, never stored (see CONTEXT.md). */
 export const STORAGE_ENGINE = {

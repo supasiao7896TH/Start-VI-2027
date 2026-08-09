@@ -1,6 +1,6 @@
 # Start VI 2027
 
-A personal web app for tracking and (later) supporting decisions about Thai stock investments, styled after Value Investing with a dividend focus. v1 scope is limited to Thai stocks; rental condo investments are a separate future context, not modeled here yet.
+A personal web app for tracking and supporting decisions about Thai stock investments, styled after Value Investing with a dividend focus. Phase ① (Ledger) and Phase ② (Decision Support) are both in scope now; rental condo investments are a separate future context, not modeled here yet.
 
 ## Language
 
@@ -43,7 +43,13 @@ _Avoid_: Position
 
 **Realized P&L**:
 Profit or loss actually locked in by a Sell Transaction (sale proceeds minus average cost of the quantity sold). Computable from the Ledger alone, with no external price data.
-_Avoid_: Unrealized P&L (not in scope for v1 — requires a current market price, which the Ledger does not track; see below)
 
-**Price Snapshot** *(not in v1)*:
-A future concept for manually recording a stock's market price at a point in time, to enable current portfolio valuation and Unrealized P&L. Deferred out of v1 because live prices can only be sourced from screenshots the user provides, not fetched automatically.
+**Price Snapshot**:
+A stock's market price at a point in time, entered manually by the user (never fetched automatically — live prices can only come from screenshots the user provides). Full history is kept, not just the latest — one symbol can have many snapshots over time. Not a Transaction: recording a price never changes a Holding's quantity or cost basis.
+
+**Unrealized P&L**:
+For a Holding, `(latest Price Snapshot price − average cost) × quantity`. Computed fresh from the Holding plus the latest Price Snapshot for that symbol — never stored. If the symbol has no Price Snapshot yet, Unrealized P&L is undefined (shown as "—"), not zero.
+
+**VI Scorecard Entry**:
+A dated evaluation of one stock — held or not — against the 15-item checklist from the `vi-analysis` skill (§22.5): 4 categories (Business & Moat /10, Financial /10, Dividend /6, Valuation /4), each item worth 0 or 2 points, no partial credit. Also carries the raw inputs (EPS, BVPS, FCF/share, WACC, growth rates, DPS, required return, current price) for the skill's 4 Valuation methods (§22.4: DCF, P/E Relative, Graham Number, DDM). Only the raw checklist answers and valuation inputs are stored — the total score, verdict, and computed fair values are always recomputed from them, the same principle as Holdings/Realized P&L never being stored directly. Independent of Price Snapshot and the Ledger; scoring an unowned stock is a normal use (it's a buy-screening tool, not just a review of existing Holdings).
+_Avoid_: Watchlist entry (not modeled separately — a Scorecard Entry serves that purpose)

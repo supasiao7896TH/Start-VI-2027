@@ -6,6 +6,26 @@ import { UI_RENDERER, filterTransactions } from './ui-renderer.js';
 import { DEBUG_MODULE } from './debug-module.js';
 import { FEE_SETTINGS } from './fee-settings.js';
 import { calculateBuyNetCashOut, calculateSellNetCashIn } from './fee-calculator.js';
+import { PRICE_STORAGE } from './price-storage.js';
+import { SCORECARD_STORAGE } from './scorecard-storage.js';
+import { calculateAllValuations, calculateUnrealizedPnL, getLatestPrice } from './valuation-engine.js';
+import { calculateScorecard, SCORECARD_CRITERIA } from './scorecard-engine.js';
+import { DECISION_SUPPORT_RENDERER } from './decision-support-renderer.js';
+
+const VALUATION_PERCENT_FIELDS = ['wacc', 'growthRate5y', 'terminalGrowthRate', 'marginOfSafety', 'requiredReturn', 'dividendGrowthRate'];
+const VALUATION_FIELDS = [
+  'eps',
+  'bvps',
+  'peerAveragePE',
+  'fcfPerShare',
+  'wacc',
+  'growthRate5y',
+  'terminalGrowthRate',
+  'marginOfSafety',
+  'dpsNextYear',
+  'requiredReturn',
+  'dividendGrowthRate'
+];
 
 function toInt(value) {
   return value === '' || value == null ? NaN : parseInt(value, 10);
@@ -170,22 +190,75 @@ function recompute() {
   }
 }
 
+function filterBySymbol(items, symbol) {
+  if (!symbol) return items;
+  return items.filter((item) => (item.symbol ?? '').toLowerCase().includes(symbol.toLowerCase()));
+}
+
+/** Converts a Scorecard entry's raw % fields (entered as e.g. 8 meaning 8%) into the 0-1 fractions the valuation formulas expect. */
+function toCalculationInputs(valuationInputs) {
+  const scaled = { ...valuationInputs };
+  for (const key of VALUATION_PERCENT_FIELDS) {
+    if (scaled[key] != null) scaled[key] = scaled[key] / 100;
+  }
+  return scaled;
+}
+
+function buildScorecardRows(scorecards) {
+  return scorecards.map((entry) => {
+    const score = calculateScorecard(entry.criteria ?? {});
+    const results = calculateAllValuations(toCalculationInputs(entry.valuationInputs ?? {}));
+    return { entry, score, targetPrice: results.summary?.targetPrice ?? null };
+  });
+}
+
 function render(dom) {
   const state = STATE_STORE.getState();
   UI_RENDERER.renderError(dom.errorBanner, state.error);
-  UI_RENDERER.renderHoldings(dom.holdingsTable, state.computed.holdings);
+
+  const enrichedHoldings = calculateUnrealizedPnL(state.computed.holdings, state.priceSnapshots);
+  UI_RENDERER.renderHoldings(dom.holdingsTable, enrichedHoldings);
+  UI_RENDERER.renderPortfolioValueSummary(dom.portfolioValueSummary, enrichedHoldings);
   UI_RENDERER.renderCashSummary(dom.cashSummary, state.computed.cashSummary);
   UI_RENDERER.renderRealizedPnL(dom.realizedPnLTable, state.computed);
   UI_RENDERER.renderLedger(dom.ledgerTable, filterTransactions(state.transactions, state.ledgerFilter), {
     onEdit: (t) => UI_RENDERER.populateForm(dom.form, t),
     onDelete: (t) => handleDelete(t, dom)
   });
+
+  DECISION_SUPPORT_RENDERER.renderPriceHistory(dom.priceHistoryTable, filterBySymbol(state.priceSnapshots, dom.priceFilterSymbol.value), {
+    onEdit: (s) => DECISION_SUPPORT_RENDERER.populatePriceForm(dom.priceForm, s),
+    onDelete: (s) => handlePriceDelete(s, dom)
+  });
+
+  DECISION_SUPPORT_RENDERER.renderScorecardHistory(
+    dom.scorecardHistoryTable,
+    buildScorecardRows(filterBySymbol(state.scorecards, dom.scorecardFilterSymbol.value)),
+    {
+      onEdit: (entry) => {
+        DECISION_SUPPORT_RENDERER.populateScorecardForm(dom.scorecardForm, entry);
+        recalculateValuationSummary(dom);
+        recalculateScorecardTotals(dom);
+      },
+      onDelete: (entry) => handleScorecardDelete(entry, dom)
+    }
+  );
 }
 
 async function loadTransactions() {
   const transactions = await STORAGE_ENGINE.getAll();
   STATE_STORE.setState({ transactions });
   recompute();
+}
+
+async function loadPriceSnapshots() {
+  const priceSnapshots = await PRICE_STORAGE.getAll();
+  STATE_STORE.setState({ priceSnapshots });
+}
+
+async function loadScorecards() {
+  const scorecards = await SCORECARD_STORAGE.getAll();
+  STATE_STORE.setState({ scorecards });
 }
 
 async function handleSubmit(event, dom) {
@@ -317,6 +390,162 @@ async function handleImport(file, dom) {
   }
 }
 
+function buildPriceSnapshotFromForm(form) {
+  const data = new FormData(form);
+  const idRaw = data.get('id');
+  return {
+    ...(idRaw ? { id: Number(idRaw) } : {}),
+    symbol: normalizeSymbol(data.get('symbol')),
+    price: toNumber(data.get('price')),
+    asOfDate: data.get('asOfDate'),
+    note: data.get('note')?.trim() || undefined
+  };
+}
+
+function validatePriceShape(snapshot) {
+  if (!snapshot.symbol) throw new Error('กรุณาระบุหุ้น');
+  if (!(snapshot.price > 0)) throw new Error('ราคาต้องมากกว่า 0');
+  if (!snapshot.asOfDate) throw new Error('กรุณาระบุวันที่');
+}
+
+async function handlePriceSubmit(event, dom) {
+  event.preventDefault();
+  let candidate;
+  try {
+    candidate = buildPriceSnapshotFromForm(dom.priceForm);
+    validatePriceShape(candidate);
+  } catch (err) {
+    STATE_STORE.setState({ error: err.message });
+    render(dom);
+    return;
+  }
+
+  try {
+    if (candidate.id) {
+      const { id, ...changes } = candidate;
+      await PRICE_STORAGE.update(id, changes);
+    } else {
+      await PRICE_STORAGE.add(candidate);
+    }
+    await loadPriceSnapshots();
+    DECISION_SUPPORT_RENDERER.resetPriceForm(dom.priceForm);
+    STATE_STORE.setState({ error: null });
+    render(dom);
+  } catch (err) {
+    DEBUG_MODULE.error('Save price failed', err);
+    STATE_STORE.setState({ error: 'บันทึกราคาไม่สำเร็จ กรุณาลองใหม่' });
+    render(dom);
+  }
+}
+
+async function handlePriceDelete(snapshot, dom) {
+  const confirmed = window.confirm(`ลบราคา ${snapshot.symbol} ณ วันที่ ${snapshot.asOfDate} ใช่ไหม?`);
+  if (!confirmed) return;
+  try {
+    await PRICE_STORAGE.remove(snapshot.id);
+    await loadPriceSnapshots();
+    render(dom);
+  } catch (err) {
+    DEBUG_MODULE.error('Delete price failed', err);
+    STATE_STORE.setState({ error: 'ลบราคาไม่สำเร็จ กรุณาลองใหม่' });
+    render(dom);
+  }
+}
+
+function readValuationInputsFromForm(form) {
+  const data = new FormData(form);
+  const inputs = {};
+  for (const key of VALUATION_FIELDS) {
+    const raw = data.get(key);
+    inputs[key] = raw === '' || raw == null ? undefined : toNumber(raw);
+  }
+  return inputs;
+}
+
+function readCriteriaFromForm(form) {
+  const criteria = {};
+  for (const item of SCORECARD_CRITERIA) {
+    criteria[item.key] = form.elements[item.key].checked;
+  }
+  return criteria;
+}
+
+function buildScorecardEntryFromForm(form) {
+  const data = new FormData(form);
+  const idRaw = data.get('id');
+  return {
+    ...(idRaw ? { id: Number(idRaw) } : {}),
+    symbol: normalizeSymbol(data.get('symbol')),
+    date: data.get('date'),
+    currentPrice: data.get('currentPrice') === '' ? undefined : toNumber(data.get('currentPrice')),
+    valuationInputs: readValuationInputsFromForm(form),
+    criteria: readCriteriaFromForm(form),
+    note: data.get('note')?.trim() || undefined
+  };
+}
+
+function validateScorecardShape(entry) {
+  if (!entry.symbol) throw new Error('กรุณาระบุหุ้น');
+  if (!entry.date) throw new Error('กรุณาระบุวันที่ประเมิน');
+}
+
+function recalculateValuationSummary(dom) {
+  const inputs = toCalculationInputs(readValuationInputsFromForm(dom.scorecardForm));
+  const results = calculateAllValuations(inputs);
+  DECISION_SUPPORT_RENDERER.renderValuationSummary(dom.valuationSummary, results);
+}
+
+function recalculateScorecardTotals(dom) {
+  const score = calculateScorecard(readCriteriaFromForm(dom.scorecardForm));
+  DECISION_SUPPORT_RENDERER.renderScorecardTotals(dom.scorecardTotal, score);
+}
+
+async function handleScorecardSubmit(event, dom) {
+  event.preventDefault();
+  let candidate;
+  try {
+    candidate = buildScorecardEntryFromForm(dom.scorecardForm);
+    validateScorecardShape(candidate);
+  } catch (err) {
+    STATE_STORE.setState({ error: err.message });
+    render(dom);
+    return;
+  }
+
+  try {
+    if (candidate.id) {
+      const { id, ...changes } = candidate;
+      await SCORECARD_STORAGE.update(id, changes);
+    } else {
+      await SCORECARD_STORAGE.add(candidate);
+    }
+    await loadScorecards();
+    DECISION_SUPPORT_RENDERER.resetScorecardForm(dom.scorecardForm);
+    recalculateValuationSummary(dom);
+    recalculateScorecardTotals(dom);
+    STATE_STORE.setState({ error: null });
+    render(dom);
+  } catch (err) {
+    DEBUG_MODULE.error('Save scorecard failed', err);
+    STATE_STORE.setState({ error: 'บันทึก Scorecard ไม่สำเร็จ กรุณาลองใหม่' });
+    render(dom);
+  }
+}
+
+async function handleScorecardDelete(entry, dom) {
+  const confirmed = window.confirm(`ลบ Scorecard ${entry.symbol} วันที่ ${entry.date} ใช่ไหม?`);
+  if (!confirmed) return;
+  try {
+    await SCORECARD_STORAGE.remove(entry.id);
+    await loadScorecards();
+    render(dom);
+  } catch (err) {
+    DEBUG_MODULE.error('Delete scorecard failed', err);
+    STATE_STORE.setState({ error: 'ลบ Scorecard ไม่สำเร็จ กรุณาลองใหม่' });
+    render(dom);
+  }
+}
+
 export const APP_CORE = {
   async init() {
     const dom = {
@@ -336,7 +565,20 @@ export const APP_CORE = {
       filterType: document.getElementById('filter-type'),
       filterDateFrom: document.getElementById('filter-date-from'),
       filterDateTo: document.getElementById('filter-date-to'),
-      filterClearBtn: document.getElementById('filter-clear')
+      filterClearBtn: document.getElementById('filter-clear'),
+      portfolioValueSummary: document.getElementById('portfolio-value-summary'),
+      priceForm: document.getElementById('price-form'),
+      priceCancelEditBtn: document.getElementById('price-cancel-edit'),
+      priceHistoryTable: document.getElementById('price-history-table'),
+      priceFilterSymbol: document.getElementById('price-filter-symbol'),
+      scorecardForm: document.getElementById('scorecard-form'),
+      scorecardCancelEditBtn: document.getElementById('scorecard-cancel-edit'),
+      scorecardChecklist: document.getElementById('scorecard-checklist'),
+      scorecardTotal: document.getElementById('scorecard-total'),
+      valuationSummary: document.getElementById('valuation-summary'),
+      scorecardHistoryTable: document.getElementById('scorecard-history-table'),
+      scorecardFilterSymbol: document.getElementById('scorecard-filter-symbol'),
+      useLatestPriceBtn: document.getElementById('use-latest-price')
     };
 
     dom.form.elements.type.addEventListener('change', () => UI_RENDERER.updateFormVisibility(dom.form));
@@ -394,10 +636,56 @@ export const APP_CORE = {
 
     UI_RENDERER.resetForm(dom.form);
 
+    // --- Price Snapshot ---
+    dom.priceForm.addEventListener('submit', (event) => handlePriceSubmit(event, dom));
+    dom.priceCancelEditBtn.addEventListener('click', () => {
+      DECISION_SUPPORT_RENDERER.resetPriceForm(dom.priceForm);
+      STATE_STORE.setState({ error: null });
+      render(dom);
+    });
+    dom.priceFilterSymbol.addEventListener('input', () => render(dom));
+    DECISION_SUPPORT_RENDERER.resetPriceForm(dom.priceForm);
+
+    // --- VI Scorecard & Valuation ---
+    DECISION_SUPPORT_RENDERER.buildScorecardChecklist(dom.scorecardChecklist);
+    dom.scorecardForm.addEventListener('submit', (event) => handleScorecardSubmit(event, dom));
+    dom.scorecardForm.addEventListener('input', (event) => {
+      if (VALUATION_FIELDS.includes(event.target.name)) recalculateValuationSummary(dom);
+    });
+    dom.scorecardChecklist.addEventListener('change', () => recalculateScorecardTotals(dom));
+    dom.scorecardCancelEditBtn.addEventListener('click', () => {
+      DECISION_SUPPORT_RENDERER.resetScorecardForm(dom.scorecardForm);
+      recalculateValuationSummary(dom);
+      recalculateScorecardTotals(dom);
+      STATE_STORE.setState({ error: null });
+      render(dom);
+    });
+    dom.scorecardFilterSymbol.addEventListener('input', () => render(dom));
+    dom.useLatestPriceBtn.addEventListener('click', () => {
+      const symbol = normalizeSymbol(dom.scorecardForm.elements.symbol.value);
+      if (!symbol) {
+        STATE_STORE.setState({ error: 'กรุณาระบุหุ้นก่อน' });
+        render(dom);
+        return;
+      }
+      const price = getLatestPrice(STATE_STORE.getState().priceSnapshots, symbol);
+      if (price == null) {
+        STATE_STORE.setState({ error: `ยังไม่มีราคาบันทึกไว้สำหรับ ${symbol}` });
+        render(dom);
+        return;
+      }
+      dom.scorecardForm.elements.currentPrice.value = price;
+    });
+    DECISION_SUPPORT_RENDERER.resetScorecardForm(dom.scorecardForm);
+    recalculateValuationSummary(dom);
+    recalculateScorecardTotals(dom);
+
     try {
       await loadTransactions();
+      await loadPriceSnapshots();
+      await loadScorecards();
     } catch (err) {
-      DEBUG_MODULE.error('Failed to load transactions', err);
+      DEBUG_MODULE.error('Failed to load data', err);
       STATE_STORE.setState({ error: 'โหลดข้อมูลไม่สำเร็จ กรุณารีเฟรชหน้า' });
     }
     render(dom);

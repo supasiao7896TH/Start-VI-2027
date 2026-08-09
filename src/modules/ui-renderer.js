@@ -16,11 +16,11 @@ const TYPE_LABELS = {
   STOCK_DIVIDEND: 'หุ้นปันผล'
 };
 
-function formatMoney(amount) {
+export function formatMoney(amount) {
   return currencyFormatter.format(amount ?? 0);
 }
 
-function el(tag, options = {}) {
+export function el(tag, options = {}) {
   const node = document.createElement(tag);
   if (options.className) node.className = options.className;
   if (options.textContent !== undefined) node.textContent = options.textContent;
@@ -33,7 +33,7 @@ function el(tag, options = {}) {
   return node;
 }
 
-function emptyState(text) {
+export function emptyState(text) {
   return el('p', { className: 'text-sm text-slate-400 italic', textContent: text });
 }
 
@@ -86,6 +86,7 @@ export const UI_RENDERER = {
     this.updateFormVisibility(form);
   },
 
+  /** `holdings` is expected to already be enriched via calculateUnrealizedPnL — currentPrice/currentValue/unrealizedPnL are null when no Price Snapshot exists yet. */
   renderHoldings(container, holdings) {
     container.replaceChildren();
     if (holdings.length === 0) {
@@ -100,7 +101,10 @@ export const UI_RENDERER = {
           children: [
             el('th', { className: 'py-1.5 pr-3', textContent: 'หุ้น' }),
             el('th', { className: 'py-1.5 pr-3 text-right', textContent: 'จำนวน' }),
-            el('th', { className: 'py-1.5 text-right', textContent: 'ต้นทุนเฉลี่ย/หุ้น' })
+            el('th', { className: 'py-1.5 pr-3 text-right', textContent: 'ต้นทุนเฉลี่ย/หุ้น' }),
+            el('th', { className: 'py-1.5 pr-3 text-right', textContent: 'ราคาล่าสุด' }),
+            el('th', { className: 'py-1.5 pr-3 text-right', textContent: 'มูลค่าปัจจุบัน' }),
+            el('th', { className: 'py-1.5 text-right', textContent: 'Unrealized P&L' })
           ]
         })
       ]
@@ -112,13 +116,61 @@ export const UI_RENDERER = {
           children: [
             el('td', { className: 'py-1.5 pr-3 font-medium', textContent: h.symbol }),
             el('td', { className: 'py-1.5 pr-3 text-right', textContent: h.quantity.toLocaleString(APP_CONFIG.LOCALE) }),
-            el('td', { className: 'py-1.5 text-right', textContent: formatMoney(h.averageCost) })
+            el('td', { className: 'py-1.5 pr-3 text-right', textContent: formatMoney(h.averageCost) }),
+            el('td', { className: 'py-1.5 pr-3 text-right', textContent: h.currentPrice != null ? formatMoney(h.currentPrice) : '—' }),
+            el('td', { className: 'py-1.5 pr-3 text-right', textContent: h.currentValue != null ? formatMoney(h.currentValue) : '—' }),
+            el('td', {
+              className: `py-1.5 text-right font-medium ${
+                h.unrealizedPnL == null ? 'text-slate-400' : h.unrealizedPnL >= 0 ? 'text-emerald-600' : 'text-red-600'
+              }`,
+              textContent: h.unrealizedPnL != null ? formatMoney(h.unrealizedPnL) : '—'
+            })
           ]
         })
       )
     });
     table.append(thead, tbody);
     container.appendChild(table);
+  },
+
+  renderPortfolioValueSummary(container, holdings) {
+    container.replaceChildren();
+    const priced = holdings.filter((h) => h.currentValue != null);
+    if (priced.length === 0) {
+      container.appendChild(emptyState('ยังไม่มีราคาหุ้นให้คำนวณ'));
+      return;
+    }
+    const totalValue = priced.reduce((sum, h) => sum + h.currentValue, 0);
+    const totalUnrealizedPnL = priced.reduce((sum, h) => sum + h.unrealizedPnL, 0);
+    const missing = holdings.length - priced.length;
+    const list = el('dl', { className: 'space-y-1.5 text-sm' });
+    list.appendChild(
+      el('div', {
+        className: 'flex justify-between',
+        children: [
+          el('dt', { className: 'text-slate-500', textContent: 'มูลค่าพอร์ตรวม' }),
+          el('dd', { className: 'font-medium', textContent: formatMoney(totalValue) })
+        ]
+      })
+    );
+    list.appendChild(
+      el('div', {
+        className: 'flex justify-between',
+        children: [
+          el('dt', { className: 'text-slate-500', textContent: 'Unrealized P&L รวม' }),
+          el('dd', {
+            className: `font-medium ${totalUnrealizedPnL >= 0 ? 'text-emerald-600' : 'text-red-600'}`,
+            textContent: formatMoney(totalUnrealizedPnL)
+          })
+        ]
+      })
+    );
+    container.appendChild(list);
+    if (missing > 0) {
+      container.appendChild(
+        el('p', { className: 'text-xs text-slate-400 mt-2', textContent: `ยังไม่มีราคาให้ ${missing} หุ้น (ไม่รวมในยอดนี้)` })
+      );
+    }
   },
 
   renderCashSummary(container, cashSummary) {
