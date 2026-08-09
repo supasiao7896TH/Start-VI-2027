@@ -8,9 +8,14 @@ import { FEE_SETTINGS } from './fee-settings.js';
 import { calculateBuyNetCashOut, calculateSellNetCashIn } from './fee-calculator.js';
 import { PRICE_STORAGE } from './price-storage.js';
 import { SCORECARD_STORAGE } from './scorecard-storage.js';
-import { calculateAllValuations, calculateUnrealizedPnL, getLatestPrice } from './valuation-engine.js';
-import { calculateScorecard, SCORECARD_CRITERIA } from './scorecard-engine.js';
+import { calculateAllValuations, calculateUnrealizedPnL, getLatestPrice, getSuggestedDividendPerShare } from './valuation-engine.js';
+import { AUTO_SUGGESTABLE_KEYS, calculateScorecard, SCORECARD_CRITERIA, suggestQuantifiableCriteria } from './scorecard-engine.js';
 import { DECISION_SUPPORT_RENDERER } from './decision-support-renderer.js';
+
+// Keys the user has manually clicked on the currently-open Scorecard form —
+// refreshCheckboxSuggestions() must never overwrite these. Cleared whenever
+// the form is reset or (re)populated for a new/edited entry.
+const manuallyTouchedCriteria = new Set();
 
 const VALUATION_PERCENT_FIELDS = ['wacc', 'growthRate5y', 'terminalGrowthRate', 'marginOfSafety', 'requiredReturn', 'dividendGrowthRate'];
 const VALUATION_FIELDS = [
@@ -236,7 +241,10 @@ function render(dom) {
     buildScorecardRows(filterBySymbol(state.scorecards, dom.scorecardFilterSymbol.value)),
     {
       onEdit: (entry) => {
+        manuallyTouchedCriteria.clear();
         DECISION_SUPPORT_RENDERER.populateScorecardForm(dom.scorecardForm, entry);
+        // Deliberately does NOT call refreshCheckboxSuggestions — editing an existing
+        // entry must show exactly what was saved, not recompute over it on open.
         recalculateValuationSummary(dom);
         recalculateScorecardTotals(dom);
       },
@@ -493,11 +501,34 @@ function recalculateValuationSummary(dom) {
   const inputs = toCalculationInputs(readValuationInputsFromForm(dom.scorecardForm));
   const results = calculateAllValuations(inputs);
   DECISION_SUPPORT_RENDERER.renderValuationSummary(dom.valuationSummary, results);
+  return results;
 }
 
 function recalculateScorecardTotals(dom) {
   const score = calculateScorecard(readCriteriaFromForm(dom.scorecardForm));
   DECISION_SUPPORT_RENDERER.renderScorecardTotals(dom.scorecardTotal, score);
+}
+
+/** Ticks/unticks the 4 AUTO_SUGGESTABLE_KEYS boxes from data already on the form — skips any the user has clicked themselves this session (manuallyTouchedCriteria), and any suggestion that comes back null (not enough data yet). */
+function refreshCheckboxSuggestions(dom, valuationResults) {
+  const raw = readValuationInputsFromForm(dom.scorecardForm);
+  const currentPrice = toNumber(dom.scorecardForm.elements.currentPrice.value);
+  const suggestions = suggestQuantifiableCriteria({
+    currentPrice,
+    eps: raw.eps,
+    peerAveragePE: raw.peerAveragePE,
+    fcfPerShare: raw.fcfPerShare,
+    dpsNextYear: raw.dpsNextYear,
+    baseCase: valuationResults.summary?.baseCase
+  });
+
+  for (const key of AUTO_SUGGESTABLE_KEYS) {
+    if (manuallyTouchedCriteria.has(key)) continue;
+    if (suggestions[key] == null) continue;
+    dom.scorecardForm.elements[key].checked = suggestions[key];
+  }
+
+  recalculateScorecardTotals(dom);
 }
 
 async function handleScorecardSubmit(event, dom) {
@@ -520,9 +551,9 @@ async function handleScorecardSubmit(event, dom) {
       await SCORECARD_STORAGE.add(candidate);
     }
     await loadScorecards();
+    manuallyTouchedCriteria.clear();
     DECISION_SUPPORT_RENDERER.resetScorecardForm(dom.scorecardForm);
-    recalculateValuationSummary(dom);
-    recalculateScorecardTotals(dom);
+    refreshCheckboxSuggestions(dom, recalculateValuationSummary(dom));
     STATE_STORE.setState({ error: null });
     render(dom);
   } catch (err) {
@@ -578,7 +609,8 @@ export const APP_CORE = {
       valuationSummary: document.getElementById('valuation-summary'),
       scorecardHistoryTable: document.getElementById('scorecard-history-table'),
       scorecardFilterSymbol: document.getElementById('scorecard-filter-symbol'),
-      useLatestPriceBtn: document.getElementById('use-latest-price')
+      useLatestPriceBtn: document.getElementById('use-latest-price'),
+      useLatestDividendBtn: document.getElementById('use-latest-dividend')
     };
 
     dom.form.elements.type.addEventListener('change', () => UI_RENDERER.updateFormVisibility(dom.form));
@@ -650,13 +682,19 @@ export const APP_CORE = {
     DECISION_SUPPORT_RENDERER.buildScorecardChecklist(dom.scorecardChecklist);
     dom.scorecardForm.addEventListener('submit', (event) => handleScorecardSubmit(event, dom));
     dom.scorecardForm.addEventListener('input', (event) => {
-      if (VALUATION_FIELDS.includes(event.target.name)) recalculateValuationSummary(dom);
+      if (VALUATION_FIELDS.includes(event.target.name) || event.target.name === 'currentPrice') {
+        const results = recalculateValuationSummary(dom);
+        refreshCheckboxSuggestions(dom, results);
+      }
     });
-    dom.scorecardChecklist.addEventListener('change', () => recalculateScorecardTotals(dom));
-    dom.scorecardCancelEditBtn.addEventListener('click', () => {
-      DECISION_SUPPORT_RENDERER.resetScorecardForm(dom.scorecardForm);
-      recalculateValuationSummary(dom);
+    dom.scorecardChecklist.addEventListener('change', (event) => {
+      if (AUTO_SUGGESTABLE_KEYS.includes(event.target.name)) manuallyTouchedCriteria.add(event.target.name);
       recalculateScorecardTotals(dom);
+    });
+    dom.scorecardCancelEditBtn.addEventListener('click', () => {
+      manuallyTouchedCriteria.clear();
+      DECISION_SUPPORT_RENDERER.resetScorecardForm(dom.scorecardForm);
+      refreshCheckboxSuggestions(dom, recalculateValuationSummary(dom));
       STATE_STORE.setState({ error: null });
       render(dom);
     });
@@ -675,10 +713,26 @@ export const APP_CORE = {
         return;
       }
       dom.scorecardForm.elements.currentPrice.value = price;
+      refreshCheckboxSuggestions(dom, recalculateValuationSummary(dom));
+    });
+    dom.useLatestDividendBtn.addEventListener('click', () => {
+      const symbol = normalizeSymbol(dom.scorecardForm.elements.symbol.value);
+      if (!symbol) {
+        STATE_STORE.setState({ error: 'กรุณาระบุหุ้นก่อน' });
+        render(dom);
+        return;
+      }
+      const dps = getSuggestedDividendPerShare(STATE_STORE.getState().transactions, symbol);
+      if (dps == null) {
+        STATE_STORE.setState({ error: `ยังไม่เคยมีประวัติปันผลของ ${symbol} ในพอร์ต` });
+        render(dom);
+        return;
+      }
+      dom.scorecardForm.elements.dpsNextYear.value = dps;
+      refreshCheckboxSuggestions(dom, recalculateValuationSummary(dom));
     });
     DECISION_SUPPORT_RENDERER.resetScorecardForm(dom.scorecardForm);
-    recalculateValuationSummary(dom);
-    recalculateScorecardTotals(dom);
+    refreshCheckboxSuggestions(dom, recalculateValuationSummary(dom));
 
     try {
       await loadTransactions();

@@ -243,27 +243,41 @@
           <legend class="text-sm font-medium px-1">ข้อมูล Valuation (4 วิธี — vi-analysis §22.4)</legend>
           <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
             <label class="flex flex-col gap-1">EPS (บาท/หุ้น)
-              <input type="number" name="eps" step="0.01" class="rounded-xl border border-slate-300 px-3 py-2" /></label>
+              <input type="number" name="eps" step="0.01" class="rounded-xl border border-slate-300 px-3 py-2" />
+              <span class="text-xs text-slate-400">กำไรสุทธิต่อหุ้น — งบกำไรขาดทุน (settrade.com → งบการเงิน)</span></label>
             <label class="flex flex-col gap-1">BVPS (บาท/หุ้น)
-              <input type="number" name="bvps" step="0.01" class="rounded-xl border border-slate-300 px-3 py-2" /></label>
+              <input type="number" name="bvps" step="0.01" class="rounded-xl border border-slate-300 px-3 py-2" />
+              <span class="text-xs text-slate-400">มูลค่าทางบัญชีต่อหุ้น — งบดุล (settrade.com → งบการเงิน)</span></label>
             <label class="flex flex-col gap-1">P/E เฉลี่ยกลุ่ม
-              <input type="number" name="peerAveragePE" step="0.01" class="rounded-xl border border-slate-300 px-3 py-2" /></label>
+              <input type="number" name="peerAveragePE" step="0.01" class="rounded-xl border border-slate-300 px-3 py-2" />
+              <span class="text-xs text-slate-400">P/E เฉลี่ยของหุ้นกลุ่มเดียวกัน — หน้า Sector บน settrade.com</span></label>
             <label class="flex flex-col gap-1">FCF/หุ้น (บาท)
-              <input type="number" name="fcfPerShare" step="0.01" class="rounded-xl border border-slate-300 px-3 py-2" /></label>
+              <input type="number" name="fcfPerShare" step="0.01" class="rounded-xl border border-slate-300 px-3 py-2" />
+              <span class="text-xs text-slate-400">(เงินสดจากดำเนินงาน − CapEx) ÷ จำนวนหุ้น — งบกระแสเงินสด</span></label>
             <label class="flex flex-col gap-1">WACC (%)
-              <input type="number" name="wacc" step="0.01" placeholder="8-10" class="rounded-xl border border-slate-300 px-3 py-2" /></label>
+              <input type="number" name="wacc" step="0.01" placeholder="8-10" class="rounded-xl border border-slate-300 px-3 py-2" />
+              <span class="text-xs text-slate-400">ต้นทุนเงินทุนถัวเฉลี่ย — ไม่แน่ใจใช้ 8-10% ได้</span></label>
             <label class="flex flex-col gap-1">Growth 5 ปี (%)
-              <input type="number" name="growthRate5y" step="0.01" placeholder="3-5" class="rounded-xl border border-slate-300 px-3 py-2" /></label>
+              <input type="number" name="growthRate5y" step="0.01" placeholder="3-5" class="rounded-xl border border-slate-300 px-3 py-2" />
+              <span class="text-xs text-slate-400">อัตราเติบโตรายได้/กำไรที่คาด 5 ปีข้างหน้า</span></label>
             <label class="flex flex-col gap-1">Terminal Growth (%)
-              <input type="number" name="terminalGrowthRate" step="0.01" placeholder="2-3" class="rounded-xl border border-slate-300 px-3 py-2" /></label>
+              <input type="number" name="terminalGrowthRate" step="0.01" placeholder="2-3" class="rounded-xl border border-slate-300 px-3 py-2" />
+              <span class="text-xs text-slate-400">อัตราเติบโตระยะยาวหลังปีที่ 5</span></label>
             <label class="flex flex-col gap-1">Margin of Safety (%)
-              <input type="number" name="marginOfSafety" step="0.01" placeholder="30" class="rounded-xl border border-slate-300 px-3 py-2" /></label>
+              <input type="number" name="marginOfSafety" step="0.01" placeholder="30" class="rounded-xl border border-slate-300 px-3 py-2" />
+              <span class="text-xs text-slate-400">ส่วนเผื่อความปลอดภัยสไตล์ VI — ไม่แน่ใจใช้ 20-30%</span></label>
             <label class="flex flex-col gap-1">DPS ปีหน้า (บาท)
-              <input type="number" name="dpsNextYear" step="0.01" class="rounded-xl border border-slate-300 px-3 py-2" /></label>
+              <div class="flex gap-1">
+                <input type="number" name="dpsNextYear" step="0.01" class="rounded-xl border border-slate-300 px-3 py-2 flex-1" />
+                <button type="button" id="use-latest-dividend" class="rounded-xl border border-slate-300 px-2 text-xs text-slate-600 hover:bg-white whitespace-nowrap">ใช้ปันผลล่าสุด</button>
+              </div>
+              <span class="text-xs text-slate-400">ปันผลต่อหุ้นคาดการณ์ปีหน้า — กดปุ่มถ้าหุ้นนี้เคยจ่ายปันผลในพอร์ตแล้ว หรือดูที่ settrade.com → ปันผล</span></label>
             <label class="flex flex-col gap-1">Required Return (%)
-              <input type="number" name="requiredReturn" step="0.01" placeholder="8-10" class="rounded-xl border border-slate-300 px-3 py-2" /></label>
+              <input type="number" name="requiredReturn" step="0.01" placeholder="8-10" class="rounded-xl border border-slate-300 px-3 py-2" />
+              <span class="text-xs text-slate-400">ผลตอบแทนที่ต้องการ — ไม่แน่ใจใช้ 8-10% ได้</span></label>
             <label class="flex flex-col gap-1">Div Growth (%)
-              <input type="number" name="dividendGrowthRate" step="0.01" placeholder="2-4" class="rounded-xl border border-slate-300 px-3 py-2" /></label>
+              <input type="number" name="dividendGrowthRate" step="0.01" placeholder="2-4" class="rounded-xl border border-slate-300 px-3 py-2" />
+              <span class="text-xs text-slate-400">อัตราเติบโตปันผลที่คาด</span></label>
           </div>
           <div id="valuation-summary" class="mt-4 text-sm"></div>
         </fieldset>

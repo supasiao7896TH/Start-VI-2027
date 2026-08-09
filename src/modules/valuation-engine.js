@@ -1,8 +1,41 @@
+import { LEDGER_ENGINE, TRANSACTION_TYPES } from './ledger-engine.js';
+
 export class ValuationError extends Error {
   constructor(message) {
     super(message);
     this.name = 'ValuationError';
   }
+}
+
+/**
+ * Suggests a next-year DPS from the most recent real Cash Dividend the
+ * Ledger has for `symbol` — net cash received divided by the quantity held
+ * at that point in time (replaying the Ledger up to that date). Returns null
+ * if the symbol has never paid a dividend in this Ledger.
+ */
+export function getSuggestedDividendPerShare(transactions, symbol) {
+  const dividends = transactions.filter((t) => t.type === TRANSACTION_TYPES.CASH_DIVIDEND && t.symbol === symbol);
+  if (dividends.length === 0) return null;
+
+  const latest = dividends.reduce((best, t) => {
+    if (t.date !== best.date) return t.date > best.date ? t : best;
+    return (t.createdAt ?? 0) > (best.createdAt ?? 0) ? t : best;
+  });
+
+  const upToLatest = transactions.filter(
+    (t) => t.date < latest.date || (t.date === latest.date && (t.createdAt ?? 0) <= (latest.createdAt ?? 0))
+  );
+
+  let holdings;
+  try {
+    ({ holdings } = LEDGER_ENGINE.replay(upToLatest));
+  } catch {
+    return null;
+  }
+
+  const holding = holdings.find((h) => h.symbol === symbol);
+  if (!holding || holding.quantity <= 0) return null;
+  return latest.netCashIn / holding.quantity;
 }
 
 /** Latest known price for `symbol` from Price Snapshot history (max asOfDate, tie-break createdAt), or null if none exists. */

@@ -31,6 +31,32 @@ export const SCORECARD_CATEGORY_LABELS = {
   D: 'Valuation'
 };
 
+/** The 4 (of 15) criteria that are objectively computable from numbers already on the form — the rest stay pure human judgment. */
+export const AUTO_SUGGESTABLE_KEYS = ['peBelowSectorAvg', 'priceBelowFairValue20', 'positiveFCF', 'yieldAbove4'];
+
+/**
+ * Suggests true/false for the 4 AUTO_SUGGESTABLE_KEYS from data the user has
+ * already typed elsewhere on the Scorecard form. Any criterion whose inputs
+ * aren't all present yet comes back `null` — meaning "don't touch the
+ * checkbox", not "false".
+ */
+export function suggestQuantifiableCriteria({ currentPrice, eps, peerAveragePE, fcfPerShare, dpsNextYear, baseCase }) {
+  const peBelowSectorAvg =
+    Number.isFinite(currentPrice) && Number.isFinite(eps) && eps !== 0 && Number.isFinite(peerAveragePE)
+      ? currentPrice / eps < peerAveragePE
+      : null;
+
+  const priceBelowFairValue20 =
+    Number.isFinite(currentPrice) && Number.isFinite(baseCase) ? currentPrice <= baseCase * 0.8 : null;
+
+  const positiveFCF = Number.isFinite(fcfPerShare) ? fcfPerShare > 0 : null;
+
+  const yieldAbove4 =
+    Number.isFinite(currentPrice) && currentPrice > 0 && Number.isFinite(dpsNextYear) ? dpsNextYear / currentPrice > 0.04 : null;
+
+  return { peBelowSectorAvg, priceBelowFairValue20, positiveFCF, yieldAbove4 };
+}
+
 /**
  * `criteria` is a { [key]: boolean } map — matches the vi-analysis skill's
  * checkbox-only scoring (each item is worth its full points or 0, no partial

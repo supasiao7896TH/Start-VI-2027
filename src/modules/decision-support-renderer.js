@@ -1,5 +1,5 @@
 import { el, emptyState, formatMoney } from './ui-renderer.js';
-import { SCORECARD_CATEGORY_LABELS, SCORECARD_CRITERIA } from './scorecard-engine.js';
+import { AUTO_SUGGESTABLE_KEYS, SCORECARD_CATEGORY_LABELS, SCORECARD_CRITERIA } from './scorecard-engine.js';
 
 const VERDICT_LABELS = {
   STRONG_BUY: '✅ น่าสนใจมาก (Strong Buy)',
@@ -121,7 +121,8 @@ export const DECISION_SUPPORT_RENDERER = {
         const checkbox = el('input', { className: 'rounded', attrs: { type: 'checkbox', name: item.key } });
         const label = el('label', { className: 'flex items-center gap-2 text-sm py-1' });
         label.appendChild(checkbox);
-        label.appendChild(document.createTextNode(`${item.label} (/${item.points})`));
+        const suffix = AUTO_SUGGESTABLE_KEYS.includes(item.key) ? ' — 💡 แนะนำอัตโนมัติ' : '';
+        label.appendChild(document.createTextNode(`${item.label} (/${item.points})${suffix}`));
         group.appendChild(label);
       }
       container.appendChild(group);

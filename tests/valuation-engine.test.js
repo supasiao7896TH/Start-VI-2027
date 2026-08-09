@@ -7,9 +7,15 @@ import {
   calculatePERelative,
   calculateUnrealizedPnL,
   getLatestPrice,
+  getSuggestedDividendPerShare,
   summarizeValuation,
   ValuationError
 } from '../src/modules/valuation-engine.js';
+
+let nextId = 1;
+function tx(overrides) {
+  return { id: nextId++, date: '2026-01-01', createdAt: nextId, ...overrides };
+}
 
 describe('getLatestPrice', () => {
   it('picks the snapshot with the latest asOfDate for the symbol', () => {
@@ -32,6 +38,31 @@ describe('getLatestPrice', () => {
 
   it('returns null when the symbol has no snapshots', () => {
     expect(getLatestPrice([], 'PTT')).toBeNull();
+  });
+});
+
+describe('getSuggestedDividendPerShare', () => {
+  it('divides the latest Cash Dividend by the quantity held at that time', () => {
+    const transactions = [
+      tx({ type: 'BUY', symbol: 'PTT', quantity: 100, netCashOut: 3500, date: '2026-01-01' }),
+      tx({ type: 'CASH_DIVIDEND', symbol: 'PTT', netCashIn: 200, date: '2026-02-01' })
+    ];
+    expect(getSuggestedDividendPerShare(transactions, 'PTT')).toBe(2); // 200 / 100
+  });
+
+  it('picks the most recent dividend when there are several, ignoring quantity changes after it', () => {
+    const transactions = [
+      tx({ type: 'BUY', symbol: 'PTT', quantity: 100, netCashOut: 3500, date: '2026-01-01' }),
+      tx({ type: 'CASH_DIVIDEND', symbol: 'PTT', netCashIn: 200, date: '2026-02-01' }), // 200/100 = 2
+      tx({ type: 'BUY', symbol: 'PTT', quantity: 100, netCashOut: 4000, date: '2026-03-01' }), // now 200 held
+      tx({ type: 'CASH_DIVIDEND', symbol: 'PTT', netCashIn: 500, date: '2026-04-01' }) // 500/200 = 2.5
+    ];
+    expect(getSuggestedDividendPerShare(transactions, 'PTT')).toBe(2.5);
+  });
+
+  it('returns null when the symbol has never paid a dividend in this Ledger', () => {
+    const transactions = [tx({ type: 'BUY', symbol: 'PTT', quantity: 100, netCashOut: 3500, date: '2026-01-01' })];
+    expect(getSuggestedDividendPerShare(transactions, 'PTT')).toBeNull();
   });
 });
 
