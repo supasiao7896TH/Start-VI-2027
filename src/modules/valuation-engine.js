@@ -67,6 +67,22 @@ export function calculateUnrealizedPnL(holdings, priceSnapshots) {
  * year at wacc, adds a Gordon Growth terminal value discounted back to present.
  * Matches vi-analysis skill §22.4 method 1.
  */
+/**
+ * Guided FCF/share helper for the Scorecard form: derives shares outstanding
+ * from Market Cap ÷ current price, then divides (Operating Cash Flow − CapEx)
+ * by it. All three money figures must share the same unit (e.g. ล้านบาท) —
+ * that unit cancels out of the formula, so no conversion is needed. CapEx is
+ * optional and defaults to 0. Never throws — returns null when there isn't
+ * enough data yet to compute (this is a live "fill in as you type" helper).
+ */
+export function calculateFcfPerShareFromFinancials({ operatingCashFlow, capex, marketCap, currentPrice }) {
+  if (!Number.isFinite(operatingCashFlow) || !Number.isFinite(marketCap) || marketCap === 0 || !Number.isFinite(currentPrice)) {
+    return null;
+  }
+  const capexValue = Number.isFinite(capex) ? capex : 0;
+  return ((operatingCashFlow - capexValue) * currentPrice) / marketCap;
+}
+
 export function calculateDCF({ fcfPerShare, wacc, growthRate5y, terminalGrowthRate }) {
   if (!(wacc > terminalGrowthRate)) {
     throw new ValuationError('WACC ต้องมากกว่า Terminal Growth Rate ไม่งั้นสูตร Terminal Value จะพัง');

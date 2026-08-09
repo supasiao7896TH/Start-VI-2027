@@ -3,6 +3,7 @@ import {
   calculateAllValuations,
   calculateDCF,
   calculateDDM,
+  calculateFcfPerShareFromFinancials,
   calculateGrahamNumber,
   calculatePERelative,
   calculateUnrealizedPnL,
@@ -82,6 +83,36 @@ describe('calculateUnrealizedPnL', () => {
     expect(result.currentPrice).toBeNull();
     expect(result.currentValue).toBeNull();
     expect(result.unrealizedPnL).toBeNull();
+  });
+});
+
+describe('calculateFcfPerShareFromFinancials', () => {
+  it('computes FCF/share as (OCF - CapEx) * price / marketCap', () => {
+    // Shares outstanding = 5000 (marketCap) / 30 (price) = 166.67 (in the same
+    // millions unit as OCF/CapEx) -> FCF/share = (500-100)/166.67 = 2.4
+    const result = calculateFcfPerShareFromFinancials({
+      operatingCashFlow: 500,
+      capex: 100,
+      marketCap: 5000,
+      currentPrice: 30
+    });
+    expect(result).toBeCloseTo(((500 - 100) * 30) / 5000, 6);
+  });
+
+  it('treats a missing CapEx as 0', () => {
+    const withoutCapex = calculateFcfPerShareFromFinancials({ operatingCashFlow: 500, marketCap: 5000, currentPrice: 30 });
+    const withZeroCapex = calculateFcfPerShareFromFinancials({ operatingCashFlow: 500, capex: 0, marketCap: 5000, currentPrice: 30 });
+    expect(withoutCapex).toBe(withZeroCapex);
+  });
+
+  it('returns null when a required input is missing', () => {
+    expect(calculateFcfPerShareFromFinancials({ capex: 100, marketCap: 5000, currentPrice: 30 })).toBeNull(); // no OCF
+    expect(calculateFcfPerShareFromFinancials({ operatingCashFlow: 500, capex: 100, currentPrice: 30 })).toBeNull(); // no marketCap
+    expect(calculateFcfPerShareFromFinancials({ operatingCashFlow: 500, capex: 100, marketCap: 5000 })).toBeNull(); // no currentPrice
+  });
+
+  it('returns null instead of dividing by zero when marketCap is 0', () => {
+    expect(calculateFcfPerShareFromFinancials({ operatingCashFlow: 500, marketCap: 0, currentPrice: 30 })).toBeNull();
   });
 });
 

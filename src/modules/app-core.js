@@ -8,7 +8,13 @@ import { FEE_SETTINGS } from './fee-settings.js';
 import { calculateBuyNetCashOut, calculateSellNetCashIn } from './fee-calculator.js';
 import { PRICE_STORAGE } from './price-storage.js';
 import { SCORECARD_STORAGE } from './scorecard-storage.js';
-import { calculateAllValuations, calculateUnrealizedPnL, getLatestPrice, getSuggestedDividendPerShare } from './valuation-engine.js';
+import {
+  calculateAllValuations,
+  calculateFcfPerShareFromFinancials,
+  calculateUnrealizedPnL,
+  getLatestPrice,
+  getSuggestedDividendPerShare
+} from './valuation-engine.js';
 import { AUTO_SUGGESTABLE_KEYS, calculateScorecard, SCORECARD_CRITERIA, suggestQuantifiableCriteria } from './scorecard-engine.js';
 import { DECISION_SUPPORT_RENDERER } from './decision-support-renderer.js';
 
@@ -531,6 +537,27 @@ function refreshCheckboxSuggestions(dom, valuationResults) {
   recalculateScorecardTotals(dom);
 }
 
+/** Guided FCF/share calculator: fills the main fcfPerShare field from Operating Cash Flow / CapEx / Market Cap + the currentPrice field already on the form. Requires currentPrice to be filled in first — refuses to guess silently. */
+function handleFcfHelperInput(dom) {
+  const currentPrice = toNumber(dom.scorecardForm.elements.currentPrice.value);
+  if (!Number.isFinite(currentPrice)) {
+    STATE_STORE.setState({ error: 'กรุณากรอกราคาปัจจุบันก่อนใช้ตัวช่วยคำนวณ FCF/หุ้น' });
+    render(dom);
+    return;
+  }
+
+  const fcfPerShare = calculateFcfPerShareFromFinancials({
+    operatingCashFlow: toNumber(dom.fcfHelperOcf.value),
+    capex: toNumber(dom.fcfHelperCapex.value),
+    marketCap: toNumber(dom.fcfHelperMarketCap.value),
+    currentPrice
+  });
+  if (fcfPerShare == null) return;
+
+  dom.scorecardForm.elements.fcfPerShare.value = fcfPerShare;
+  refreshCheckboxSuggestions(dom, recalculateValuationSummary(dom));
+}
+
 async function handleScorecardSubmit(event, dom) {
   event.preventDefault();
   let candidate;
@@ -610,7 +637,10 @@ export const APP_CORE = {
       scorecardHistoryTable: document.getElementById('scorecard-history-table'),
       scorecardFilterSymbol: document.getElementById('scorecard-filter-symbol'),
       useLatestPriceBtn: document.getElementById('use-latest-price'),
-      useLatestDividendBtn: document.getElementById('use-latest-dividend')
+      useLatestDividendBtn: document.getElementById('use-latest-dividend'),
+      fcfHelperOcf: document.getElementById('fcf-helper-ocf'),
+      fcfHelperCapex: document.getElementById('fcf-helper-capex'),
+      fcfHelperMarketCap: document.getElementById('fcf-helper-market-cap')
     };
 
     dom.form.elements.type.addEventListener('change', () => UI_RENDERER.updateFormVisibility(dom.form));
@@ -687,6 +717,9 @@ export const APP_CORE = {
         refreshCheckboxSuggestions(dom, results);
       }
     });
+    for (const helperInput of [dom.fcfHelperOcf, dom.fcfHelperCapex, dom.fcfHelperMarketCap]) {
+      helperInput.addEventListener('input', () => handleFcfHelperInput(dom));
+    }
     dom.scorecardChecklist.addEventListener('change', (event) => {
       if (AUTO_SUGGESTABLE_KEYS.includes(event.target.name)) manuallyTouchedCriteria.add(event.target.name);
       recalculateScorecardTotals(dom);

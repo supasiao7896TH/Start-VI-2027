@@ -279,6 +279,20 @@
               <input type="number" name="dividendGrowthRate" step="0.01" placeholder="2-4" class="rounded-xl border border-slate-300 px-3 py-2" />
               <span class="text-xs text-slate-400">อัตราเติบโตปันผลที่คาด</span></label>
           </div>
+
+          <details class="mt-4 text-sm border border-slate-200 rounded-xl p-3">
+            <summary class="cursor-pointer font-medium text-slate-600">🧮 คำนวณ FCF/หุ้น จากงบการเงิน (ไม่บังคับ)</summary>
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-3">
+              <label class="flex flex-col gap-1">เงินสดจากดำเนินงาน (ล้านบาท)
+                <input type="number" id="fcf-helper-ocf" step="0.01" class="rounded-xl border border-slate-300 px-3 py-2" /></label>
+              <label class="flex flex-col gap-1">CapEx (ล้านบาท, ไม่บังคับ)
+                <input type="number" id="fcf-helper-capex" step="0.01" class="rounded-xl border border-slate-300 px-3 py-2" /></label>
+              <label class="flex flex-col gap-1">Market Cap (ล้านบาท)
+                <input type="number" id="fcf-helper-market-cap" step="0.01" class="rounded-xl border border-slate-300 px-3 py-2" /></label>
+            </div>
+            <p class="text-xs text-slate-400 mt-2">ใช้ "ราคาปัจจุบัน" จากช่องด้านบนอัตโนมัติ (กรอกก่อน) — คำนวณแล้วเติมลงช่อง FCF/หุ้น ให้เอง ยังแก้เองทับได้เสมอ เว้น CapEx ว่างได้ถ้าไม่มีข้อมูล (จะถือว่าเป็น 0)</p>
+          </details>
+
           <div id="valuation-summary" class="mt-4 text-sm"></div>
         </fieldset>
 
