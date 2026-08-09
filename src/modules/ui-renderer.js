@@ -69,6 +69,7 @@ export const UI_RENDERER = {
     form.elements.type.value = transaction.type;
     if (form.elements.symbol) form.elements.symbol.value = transaction.symbol ?? '';
     if (form.elements.quantity) form.elements.quantity.value = transaction.quantity ?? '';
+    if (form.elements.pricePerShare) form.elements.pricePerShare.value = transaction.pricePerShare ?? '';
     if (form.elements.netCashOut) form.elements.netCashOut.value = transaction.netCashOut ?? '';
     if (form.elements.netCashIn) form.elements.netCashIn.value = transaction.netCashIn ?? '';
     if (form.elements.direction) form.elements.direction.value = transaction.direction ?? 'DEPOSIT';
@@ -239,9 +240,13 @@ export const UI_RENDERER = {
 function describeTransaction(t) {
   switch (t.type) {
     case 'BUY':
-      return `${t.quantity?.toLocaleString(APP_CONFIG.LOCALE)} หุ้น · ${formatMoney(t.netCashOut)}`;
+      return t.pricePerShare
+        ? `${t.quantity?.toLocaleString(APP_CONFIG.LOCALE)} หุ้น @ ${formatMoney(t.pricePerShare)} · รวม ${formatMoney(t.netCashOut)}`
+        : `${t.quantity?.toLocaleString(APP_CONFIG.LOCALE)} หุ้น · ${formatMoney(t.netCashOut)}`;
     case 'SELL':
-      return `${t.quantity?.toLocaleString(APP_CONFIG.LOCALE)} หุ้น · ${formatMoney(t.netCashIn)}`;
+      return t.pricePerShare
+        ? `${t.quantity?.toLocaleString(APP_CONFIG.LOCALE)} หุ้น @ ${formatMoney(t.pricePerShare)} · รวม ${formatMoney(t.netCashIn)}`
+        : `${t.quantity?.toLocaleString(APP_CONFIG.LOCALE)} หุ้น · ${formatMoney(t.netCashIn)}`;
     case 'CASH_DIVIDEND':
       return formatMoney(t.netCashIn);
     case 'CASH_DEPOSIT_WITHDRAWAL':

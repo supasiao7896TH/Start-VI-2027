@@ -13,10 +13,10 @@ A single dated event in the Ledger that changes cash or holdings. v1 supports fi
 _Avoid_: Entry, record, event
 
 **Buy**:
-A Transaction that increases the quantity held of a stock in exchange for a net cash amount leaving the account. The net cash amount already includes broker commission/VAT — there is no separate fee field.
+A Transaction that increases the quantity held of a stock in exchange for a net cash amount leaving the account. The net cash amount already includes broker commission/VAT — there is no separate fee field. May optionally record the raw `pricePerShare` it was bought at, purely for the user's own reference — it plays no part in the Average Cost calculation, which always comes from the net cash amount alone.
 
 **Sell**:
-A Transaction that decreases the quantity held of a stock in exchange for a net cash amount entering the account. The net cash amount already includes broker commission/VAT — there is no separate fee field.
+A Transaction that decreases the quantity held of a stock in exchange for a net cash amount entering the account. The net cash amount already includes broker commission/VAT — there is no separate fee field. May optionally record the raw `pricePerShare` it was sold at, purely for the user's own reference — it plays no part in Realized P&L, which always comes from the net cash amount alone.
 
 **Cash Dividend**:
 A Transaction that adds cash to the account as a payout from a held stock, without changing the quantity held. Recorded net of the 10% Thai withholding tax — i.e. the actual amount credited to the account, not the gross declared dividend. Always tied to the paying stock's symbol (required, not optional).

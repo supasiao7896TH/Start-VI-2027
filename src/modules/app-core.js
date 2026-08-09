@@ -1,8 +1,11 @@
+import { APP_CONFIG } from './app-config.js';
 import { STATE_STORE } from './state-store.js';
 import { STORAGE_ENGINE } from './storage-engine.js';
 import { LEDGER_ENGINE, LedgerError, TRANSACTION_TYPES } from './ledger-engine.js';
 import { UI_RENDERER } from './ui-renderer.js';
 import { DEBUG_MODULE } from './debug-module.js';
+import { FEE_SETTINGS } from './fee-settings.js';
+import { calculateBuyNetCashOut, calculateSellNetCashIn } from './fee-calculator.js';
 
 function toInt(value) {
   return value === '' || value == null ? NaN : parseInt(value, 10);
@@ -34,6 +37,7 @@ function buildTransactionFromForm(form) {
         ...base,
         symbol: normalizeSymbol(data.get('symbol')),
         quantity: toInt(data.get('quantity')),
+        pricePerShare: data.get('pricePerShare') === '' ? undefined : toNumber(data.get('pricePerShare')),
         netCashOut: toNumber(data.get('netCashOut'))
       };
     case TRANSACTION_TYPES.SELL:
@@ -41,6 +45,7 @@ function buildTransactionFromForm(form) {
         ...base,
         symbol: normalizeSymbol(data.get('symbol')),
         quantity: toInt(data.get('quantity')),
+        pricePerShare: data.get('pricePerShare') === '' ? undefined : toNumber(data.get('pricePerShare')),
         netCashIn: toNumber(data.get('netCashIn'))
       };
     case TRANSACTION_TYPES.CASH_DIVIDEND:
@@ -78,11 +83,13 @@ function validateShape(t) {
     case TRANSACTION_TYPES.BUY:
       if (!t.symbol) throw new Error('กรุณาระบุหุ้น');
       if (!Number.isInteger(t.quantity) || t.quantity <= 0) throw new Error('จำนวนหุ้นต้องเป็นจำนวนเต็มมากกว่า 0');
+      if (t.pricePerShare !== undefined && !(t.pricePerShare > 0)) throw new Error('ราคาต่อหุ้นต้องมากกว่า 0');
       if (!(t.netCashOut > 0)) throw new Error('เงินสดจ่ายสุทธิต้องมากกว่า 0');
       return;
     case TRANSACTION_TYPES.SELL:
       if (!t.symbol) throw new Error('กรุณาระบุหุ้น');
       if (!Number.isInteger(t.quantity) || t.quantity <= 0) throw new Error('จำนวนหุ้นต้องเป็นจำนวนเต็มมากกว่า 0');
+      if (t.pricePerShare !== undefined && !(t.pricePerShare > 0)) throw new Error('ราคาต่อหุ้นต้องมากกว่า 0');
       if (!(t.netCashIn > 0)) throw new Error('เงินสดรับสุทธิต้องมากกว่า 0');
       return;
     case TRANSACTION_TYPES.CASH_DIVIDEND:
@@ -203,6 +210,30 @@ async function handleDelete(transaction, dom) {
   }
 }
 
+/** Fills netCashOut/netCashIn from quantity × pricePerShare ± broker fees. Only called from input listeners — never on populateForm — so opening an old record for edit never silently overwrites its stored net cash. */
+function recalculateNetCash(form) {
+  const type = form.elements.type.value;
+  if (type !== TRANSACTION_TYPES.BUY && type !== TRANSACTION_TYPES.SELL) return;
+
+  const quantity = toInt(form.elements.quantity.value);
+  const pricePerShare = toNumber(form.elements.pricePerShare.value);
+  if (!(quantity > 0) || !(pricePerShare > 0)) return;
+
+  const userSettings = FEE_SETTINGS.get();
+  const feeSettings = {
+    commissionRate: (userSettings.commissionRate ?? 0) / 100,
+    minCommission: userSettings.minCommission ?? 0,
+    setFeeRate: APP_CONFIG.SET_FEE_RATE,
+    vatRate: APP_CONFIG.TRADE_VAT_RATE
+  };
+
+  if (type === TRANSACTION_TYPES.BUY) {
+    form.elements.netCashOut.value = calculateBuyNetCashOut({ quantity, pricePerShare, feeSettings });
+  } else {
+    form.elements.netCashIn.value = calculateSellNetCashIn({ quantity, pricePerShare, feeSettings });
+  }
+}
+
 function handleExport() {
   const { transactions } = STATE_STORE.getState();
   const blob = new Blob([JSON.stringify(transactions, null, 2)], { type: 'application/json' });
@@ -224,17 +255,34 @@ export const APP_CORE = {
       holdingsTable: document.getElementById('holdings-table'),
       cashSummary: document.getElementById('cash-summary'),
       realizedPnLTable: document.getElementById('realized-pnl-table'),
-      ledgerTable: document.getElementById('ledger-table')
+      ledgerTable: document.getElementById('ledger-table'),
+      feeCommissionRate: document.getElementById('fee-commission-rate'),
+      feeMinCommission: document.getElementById('fee-min-commission')
     };
 
     dom.form.elements.type.addEventListener('change', () => UI_RENDERER.updateFormVisibility(dom.form));
     dom.form.addEventListener('submit', (event) => handleSubmit(event, dom));
+    dom.form.elements.quantity.addEventListener('input', () => recalculateNetCash(dom.form));
+    dom.form.elements.pricePerShare.addEventListener('input', () => recalculateNetCash(dom.form));
     dom.cancelEditBtn.addEventListener('click', () => {
       UI_RENDERER.resetForm(dom.form);
       STATE_STORE.setState({ error: null });
       render(dom);
     });
     dom.exportBtn.addEventListener('click', handleExport);
+
+    const initialFeeSettings = FEE_SETTINGS.get();
+    dom.feeCommissionRate.value = initialFeeSettings.commissionRate;
+    dom.feeMinCommission.value = initialFeeSettings.minCommission;
+    const onFeeSettingsChange = () => {
+      FEE_SETTINGS.set({
+        commissionRate: toNumber(dom.feeCommissionRate.value) || 0,
+        minCommission: toNumber(dom.feeMinCommission.value) || 0
+      });
+      recalculateNetCash(dom.form);
+    };
+    dom.feeCommissionRate.addEventListener('change', onFeeSettingsChange);
+    dom.feeMinCommission.addEventListener('change', onFeeSettingsChange);
 
     UI_RENDERER.resetForm(dom.form);
 

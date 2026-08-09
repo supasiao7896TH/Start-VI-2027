@@ -27,6 +27,21 @@
     <div id="error-banner" class="hidden rounded-2xl bg-red-50 border border-red-200 text-red-700 px-4 py-3 text-sm"></div>
 
     <section class="glass rounded-2xl shadow p-5">
+      <details class="mb-4 text-sm">
+        <summary class="cursor-pointer font-medium text-slate-600">⚙ ตั้งค่าอัตราค่าธรรมเนียม</summary>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-3">
+          <label class="flex flex-col gap-1">
+            ค่าคอมมิชชั่น (%)
+            <input type="number" id="fee-commission-rate" min="0" step="0.001" class="rounded-xl border border-slate-300 px-3 py-2" />
+          </label>
+          <label class="flex flex-col gap-1">
+            ค่าคอมขั้นต่ำต่อรายการ (บาท)
+            <input type="number" id="fee-min-commission" min="0" step="1" class="rounded-xl border border-slate-300 px-3 py-2" />
+          </label>
+        </div>
+        <p class="text-xs text-slate-400 mt-2">ใช้คำนวณ "เงินสดสุทธิ" ให้อัตโนมัติเมื่อกรอกจำนวนหุ้น + ราคาต่อหุ้นใน Buy/Sell (รวม VAT 7% และค่าธรรมเนียมตลาดหลักทรัพย์ 0.007% ให้แล้ว) กรอกอัตราค่าคอมฯ จริงของพี่ A เอง เพราะแต่ละบัญชี/ช่องทางเทรดไม่เท่ากัน</p>
+      </details>
+
       <h2 class="font-semibold mb-4" id="form-title">บันทึกรายการใหม่</h2>
       <form id="transaction-form" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <input type="hidden" name="id" />
@@ -55,6 +70,11 @@
         <label data-for-types="BUY,SELL" class="flex flex-col gap-1 text-sm">
           จำนวนหุ้น
           <input type="number" name="quantity" min="1" step="1" class="rounded-xl border border-slate-300 px-3 py-2" />
+        </label>
+
+        <label data-for-types="BUY,SELL" class="flex flex-col gap-1 text-sm">
+          ราคาต่อหุ้น (ไม่บังคับ — กรอกแล้วคำนวณเงินสดสุทธิให้อัตโนมัติ)
+          <input type="number" name="pricePerShare" min="0.01" step="0.01" class="rounded-xl border border-slate-300 px-3 py-2" />
         </label>
 
         <label data-for-types="BUY" class="flex flex-col gap-1 text-sm">
