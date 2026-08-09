@@ -8,10 +8,10 @@ const VERDICT_LABELS = {
 };
 
 const VALUATION_ROW_LABELS = [
-  ['dcf', 'DCF'],
-  ['peRelative', 'P/E Relative'],
-  ['grahamNumber', 'Graham Number'],
-  ['ddm', 'DDM']
+  ['dcf', 'DCF', 'มูลค่าจากคาดการณ์กระแสเงินสดอิสระในอนาคต คิดลดกลับมาเป็นมูลค่าปัจจุบัน'],
+  ['peRelative', 'P/E Relative', 'ราคาที่ควรจะเป็น ถ้าหุ้นนี้ซื้อขายที่ P/E เฉลี่ยของกลุ่มอุตสาหกรรม'],
+  ['grahamNumber', 'Graham Number', 'มูลค่าตามเกณฑ์ Benjamin Graham (P/E ≤ 15x และ P/BV ≤ 1.5x)'],
+  ['ddm', 'DDM', 'มูลค่าจากคาดการณ์เงินปันผลในอนาคต เหมาะกับหุ้นปันผลสม่ำเสมอ']
 ];
 
 export const DECISION_SUPPORT_RENDERER = {
@@ -141,14 +141,19 @@ export const DECISION_SUPPORT_RENDERER = {
   /** `results` is the output of valuation-engine's calculateAllValuations() — each method is a number or null, plus an optional summary and error messages. */
   renderValuationSummary(container, results) {
     container.replaceChildren();
-    const list = el('dl', { className: 'space-y-1' });
-    for (const [key, label] of VALUATION_ROW_LABELS) {
+    const list = el('dl', { className: 'space-y-2' });
+    for (const [key, label, description] of VALUATION_ROW_LABELS) {
       list.appendChild(
         el('div', {
-          className: 'flex justify-between',
           children: [
-            el('dt', { className: 'text-slate-500', textContent: label }),
-            el('dd', { className: 'font-medium', textContent: results[key] != null ? formatMoney(results[key]) : '—' })
+            el('div', {
+              className: 'flex justify-between',
+              children: [
+                el('dt', { className: 'text-slate-500', textContent: label }),
+                el('dd', { className: 'font-medium', textContent: results[key] != null ? formatMoney(results[key]) : '—' })
+              ]
+            }),
+            el('p', { className: 'text-xs text-slate-400', textContent: description })
           ]
         })
       );
@@ -158,21 +163,25 @@ export const DECISION_SUPPORT_RENDERER = {
     if (results.summary) {
       container.appendChild(
         el('div', {
-          className: 'flex justify-between mt-2 pt-2 border-t border-slate-200',
+          className: 'flex justify-between mt-3 pt-2 border-t border-slate-200',
           children: [
             el('dt', { className: 'font-semibold', textContent: 'Base Case' }),
             el('dd', { className: 'font-semibold', textContent: formatMoney(results.summary.baseCase) })
           ]
         })
       );
+      container.appendChild(el('p', { className: 'text-xs text-slate-400', textContent: 'ค่าเฉลี่ยของ 4 วิธีข้างบน — ใช้เป็นมูลค่ายุติธรรมหลัก' }));
       container.appendChild(
         el('div', {
-          className: 'flex justify-between font-semibold text-emerald-700',
+          className: 'flex justify-between font-semibold text-emerald-700 mt-1',
           children: [
             el('span', { textContent: 'ราคาเป้าหมาย (หลัง MoS)' }),
             el('span', { textContent: formatMoney(results.summary.targetPrice) })
           ]
         })
+      );
+      container.appendChild(
+        el('p', { className: 'text-xs text-slate-400', textContent: 'Base Case หักส่วนเผื่อความปลอดภัย (Margin of Safety) แล้ว — ราคาที่น่าสนใจเข้าซื้อสไตล์ VI' })
       );
     }
 
