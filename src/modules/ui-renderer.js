@@ -11,7 +11,9 @@ const TYPE_LABELS = {
   SELL: 'ขาย',
   CASH_DIVIDEND: 'ปันผล',
   CASH_DEPOSIT_WITHDRAWAL: 'ฝาก/ถอน',
-  MANUAL_ADJUSTMENT: 'ปรับยอด'
+  MANUAL_ADJUSTMENT: 'ปรับยอด',
+  STOCK_SPLIT: 'แตกพาร์',
+  STOCK_DIVIDEND: 'หุ้นปันผล'
 };
 
 function formatMoney(amount) {
@@ -76,6 +78,8 @@ export const UI_RENDERER = {
     if (form.elements.amount) form.elements.amount.value = transaction.amount ?? '';
     if (form.elements.newQuantity) form.elements.newQuantity.value = transaction.newQuantity ?? '';
     if (form.elements.newAverageCost) form.elements.newAverageCost.value = transaction.newAverageCost ?? '';
+    if (form.elements.splitRatio) form.elements.splitRatio.value = transaction.splitRatio ?? '';
+    if (form.elements.additionalQuantity) form.elements.additionalQuantity.value = transaction.additionalQuantity ?? '';
     if (form.elements.note) form.elements.note.value = transaction.note ?? '';
     document.getElementById('form-title').textContent = `แก้ไขรายการ #${transaction.id}`;
     document.getElementById('cancel-edit').classList.remove('hidden');
@@ -253,7 +257,23 @@ function describeTransaction(t) {
       return `${t.direction === 'DEPOSIT' ? 'ฝาก' : 'ถอน'} ${formatMoney(t.amount)}`;
     case 'MANUAL_ADJUSTMENT':
       return `qty → ${t.newQuantity ?? '—'} · avg cost → ${t.newAverageCost != null ? formatMoney(t.newAverageCost) : '—'}`;
+    case 'STOCK_SPLIT':
+      return `แตกพาร์ 1:${t.splitRatio}`;
+    case 'STOCK_DIVIDEND':
+      return `ได้เพิ่ม +${t.additionalQuantity?.toLocaleString(APP_CONFIG.LOCALE)} หุ้น`;
     default:
       return '';
   }
+}
+
+/** Pure UI-only filter — Holdings/Realized P&L/Cash Summary always use the full, unfiltered Ledger. */
+export function filterTransactions(transactions, filter) {
+  const { symbol, type, dateFrom, dateTo } = filter;
+  return transactions.filter((t) => {
+    if (symbol && !(t.symbol ?? '').toLowerCase().includes(symbol.toLowerCase())) return false;
+    if (type !== 'ALL' && t.type !== type) return false;
+    if (dateFrom && t.date < dateFrom) return false;
+    if (dateTo && t.date > dateTo) return false;
+    return true;
+  });
 }

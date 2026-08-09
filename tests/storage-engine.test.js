@@ -57,4 +57,19 @@ describe('STORAGE_ENGINE', () => {
     const all = await STORAGE_ENGINE.getAll();
     expect(all).toHaveLength(0);
   });
+
+  it('replaceAll() wipes existing records and stores the given ones with their original ids', async () => {
+    const STORAGE_ENGINE = await loadEngine();
+    await STORAGE_ENGINE.add({ type: TRANSACTION_TYPES.BUY, date: '2026-01-01', symbol: 'OLD', quantity: 1, netCashOut: 1 });
+
+    await STORAGE_ENGINE.replaceAll([
+      { id: 5, type: TRANSACTION_TYPES.BUY, date: '2026-02-01', symbol: 'PTT', quantity: 100, netCashOut: 1000, createdAt: 1, updatedAt: 1 },
+      { id: 9, type: TRANSACTION_TYPES.CASH_DEPOSIT_WITHDRAWAL, date: '2026-02-02', direction: 'DEPOSIT', amount: 500, createdAt: 2, updatedAt: 2 }
+    ]);
+
+    const all = await STORAGE_ENGINE.getAll();
+    expect(all).toHaveLength(2);
+    expect(all.some((t) => t.symbol === 'OLD')).toBe(false);
+    expect(all.find((t) => t.id === 5)).toMatchObject({ symbol: 'PTT', quantity: 100 });
+  });
 });

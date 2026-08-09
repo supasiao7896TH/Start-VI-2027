@@ -26,5 +26,7 @@ export const STATE_STORE = createStore({
   transactions: [],
   computed: { holdings: [], realizedPnL: [], totalRealizedPnL: 0, cashSummary: {} },
   editingId: null,
-  error: null
+  error: null,
+  // UI-only filter for the Ledger table — never affects computed (Holdings/Realized P&L/Cash Summary).
+  ledgerFilter: { symbol: '', type: 'ALL', dateFrom: '', dateTo: '' }
 });

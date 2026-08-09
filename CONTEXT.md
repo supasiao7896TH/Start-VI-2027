@@ -9,7 +9,7 @@ The record of everything that has actually happened in the portfolio — a seque
 _Avoid_: Journal, portfolio tracker, log
 
 **Transaction**:
-A single dated event in the Ledger that changes cash or holdings. v1 supports five types: Buy, Sell, Cash Dividend, Cash Deposit/Withdrawal, and Manual Adjustment.
+A single dated event in the Ledger that changes cash or holdings. v1 supports seven types: Buy, Sell, Cash Dividend, Cash Deposit/Withdrawal, Manual Adjustment, Stock Split, and Stock Dividend.
 _Avoid_: Entry, record, event
 
 **Buy**:
@@ -27,8 +27,15 @@ A Transaction that moves cash into or out of the investment account without invo
 **Manual Adjustment**:
 A Transaction that directly overrides a Holding's quantity and/or average cost, with no cash movement and no required reason. The v1 escape hatch for Corporate Actions and any other real-world event the Ledger doesn't model yet.
 
-**Corporate Action** *(not in v1)*:
-An umbrella term for company-driven events that change a Holding's quantity or cost basis without the investor buying or selling — Stock Dividend, Rights Offering, and Stock Split all belong here. None are modeled as their own Transaction type in v1; a Manual Adjustment is used instead when one occurs.
+**Corporate Action**:
+An umbrella term for company-driven events that change a Holding's quantity or cost basis without the investor buying or selling. Stock Split and Stock Dividend are modeled as their own Transaction types (below). Rights Offering is not modeled separately — exercising it is economically a Buy, so it's recorded as one. Anything else not covered here still falls back to a Manual Adjustment.
+
+**Stock Split**:
+A Transaction that multiplies an existing Holding's quantity by a `splitRatio` (e.g. 2 for a 1:2 split) and divides its average cost by the same ratio — total cost basis is unchanged. Requires an existing Holding for the symbol; rejected outright if the ratio doesn't produce a whole number of shares.
+
+**Stock Dividend**:
+A Transaction that adds `additionalQuantity` free shares to an existing Holding, keeping total cost basis unchanged (so average cost per share decreases). Requires an existing Holding for the symbol.
+_Avoid_: Bonus shares
 
 **Holding**:
 The current quantity and average cost of a single stock, derived by replaying all Buy/Sell Transactions for that stock using the Average Cost method. Not stored directly — always computed from the Ledger. Quantity is always a whole number of shares (no fractional/odd-lot shares). A Sell that would take the quantity below zero is rejected outright — the Ledger never represents a negative Holding.

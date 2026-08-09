@@ -62,5 +62,18 @@ export const STORAGE_ENGINE = {
     const db = await openDB();
     const store = db.transaction(APP_CONFIG.STORE_NAME, 'readwrite').objectStore(APP_CONFIG.STORE_NAME);
     await promisifyRequest(store.delete(id));
+  },
+
+  /** Wipes the Ledger and replaces it with `transactions` (used by JSON import). One atomic transaction — either all of it lands, or none of it does. */
+  async replaceAll(transactions) {
+    const db = await openDB();
+    const tx = db.transaction(APP_CONFIG.STORE_NAME, 'readwrite');
+    const store = tx.objectStore(APP_CONFIG.STORE_NAME);
+    store.clear();
+    for (const t of transactions) store.put(t);
+    return new Promise((resolve, reject) => {
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
   }
 };

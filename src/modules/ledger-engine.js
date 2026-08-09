@@ -3,7 +3,9 @@ export const TRANSACTION_TYPES = Object.freeze({
   SELL: 'SELL',
   CASH_DIVIDEND: 'CASH_DIVIDEND',
   CASH_DEPOSIT_WITHDRAWAL: 'CASH_DEPOSIT_WITHDRAWAL',
-  MANUAL_ADJUSTMENT: 'MANUAL_ADJUSTMENT'
+  MANUAL_ADJUSTMENT: 'MANUAL_ADJUSTMENT',
+  STOCK_SPLIT: 'STOCK_SPLIT',
+  STOCK_DIVIDEND: 'STOCK_DIVIDEND'
 });
 
 export class LedgerError extends Error {
@@ -64,6 +66,37 @@ function applySell(holdings, t, realizedPnL) {
   });
 }
 
+function applyStockSplit(holdings, t) {
+  const h = holdings.get(t.symbol);
+  if (!h || h.quantity <= 0) {
+    throw new LedgerError(`Stock Split for ${t.symbol} requires an existing Holding`, t);
+  }
+  if (!(t.splitRatio > 0) || t.splitRatio === 1) {
+    throw new LedgerError(`Stock Split for ${t.symbol} needs a splitRatio > 0 and != 1`, t);
+  }
+  const newQuantity = h.quantity * t.splitRatio;
+  if (!Number.isInteger(newQuantity)) {
+    throw new LedgerError(
+      `Stock Split ${t.splitRatio}x on ${h.quantity} ${t.symbol} does not produce a whole number of shares`,
+      t
+    );
+  }
+  holdings.set(t.symbol, { quantity: newQuantity, averageCost: h.averageCost / t.splitRatio });
+}
+
+function applyStockDividend(holdings, t) {
+  const h = holdings.get(t.symbol);
+  if (!h || h.quantity <= 0) {
+    throw new LedgerError(`Stock Dividend for ${t.symbol} requires an existing Holding`, t);
+  }
+  if (!Number.isInteger(t.additionalQuantity) || t.additionalQuantity <= 0) {
+    throw new LedgerError(`Stock Dividend for ${t.symbol} needs an additionalQuantity > 0`, t);
+  }
+  const newQuantity = h.quantity + t.additionalQuantity;
+  const totalCost = h.quantity * h.averageCost;
+  holdings.set(t.symbol, { quantity: newQuantity, averageCost: totalCost / newQuantity });
+}
+
 function applyManualAdjustment(holdings, t) {
   const h = holdings.get(t.symbol) ?? { quantity: 0, averageCost: 0 };
   const newQuantity = t.newQuantity ?? h.quantity;
@@ -105,6 +138,12 @@ export const LEDGER_ENGINE = {
           break;
         case TRANSACTION_TYPES.MANUAL_ADJUSTMENT:
           applyManualAdjustment(holdings, t);
+          break;
+        case TRANSACTION_TYPES.STOCK_SPLIT:
+          applyStockSplit(holdings, t);
+          break;
+        case TRANSACTION_TYPES.STOCK_DIVIDEND:
+          applyStockDividend(holdings, t);
           break;
         default:
           throw new LedgerError(`Unknown transaction type: ${t.type}`, t);

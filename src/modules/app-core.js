@@ -2,7 +2,7 @@ import { APP_CONFIG } from './app-config.js';
 import { STATE_STORE } from './state-store.js';
 import { STORAGE_ENGINE } from './storage-engine.js';
 import { LEDGER_ENGINE, LedgerError, TRANSACTION_TYPES } from './ledger-engine.js';
-import { UI_RENDERER } from './ui-renderer.js';
+import { UI_RENDERER, filterTransactions } from './ui-renderer.js';
 import { DEBUG_MODULE } from './debug-module.js';
 import { FEE_SETTINGS } from './fee-settings.js';
 import { calculateBuyNetCashOut, calculateSellNetCashIn } from './fee-calculator.js';
@@ -70,6 +70,18 @@ function buildTransactionFromForm(form) {
         newAverageCost: newAverageCostRaw === '' ? undefined : toNumber(newAverageCostRaw)
       };
     }
+    case TRANSACTION_TYPES.STOCK_SPLIT:
+      return {
+        ...base,
+        symbol: normalizeSymbol(data.get('symbol')),
+        splitRatio: toNumber(data.get('splitRatio'))
+      };
+    case TRANSACTION_TYPES.STOCK_DIVIDEND:
+      return {
+        ...base,
+        symbol: normalizeSymbol(data.get('symbol')),
+        additionalQuantity: toInt(data.get('additionalQuantity'))
+      };
     default:
       throw new Error(`ประเภทรายการไม่ถูกต้อง: ${type}`);
   }
@@ -110,6 +122,16 @@ function validateShape(t) {
       }
       if (t.newAverageCost !== undefined && !(t.newAverageCost >= 0)) {
         throw new Error('ต้นทุนเฉลี่ยใหม่ต้องตั้งแต่ 0 ขึ้นไป');
+      }
+      return;
+    case TRANSACTION_TYPES.STOCK_SPLIT:
+      if (!t.symbol) throw new Error('กรุณาระบุหุ้น');
+      if (!(t.splitRatio > 0) || t.splitRatio === 1) throw new Error('อัตราส่วนแตกพาร์ต้องมากกว่า 0 และไม่เท่ากับ 1');
+      return;
+    case TRANSACTION_TYPES.STOCK_DIVIDEND:
+      if (!t.symbol) throw new Error('กรุณาระบุหุ้น');
+      if (!Number.isInteger(t.additionalQuantity) || t.additionalQuantity <= 0) {
+        throw new Error('จำนวนหุ้นที่ได้เพิ่มต้องเป็นจำนวนเต็มมากกว่า 0');
       }
       return;
     default:
@@ -154,7 +176,7 @@ function render(dom) {
   UI_RENDERER.renderHoldings(dom.holdingsTable, state.computed.holdings);
   UI_RENDERER.renderCashSummary(dom.cashSummary, state.computed.cashSummary);
   UI_RENDERER.renderRealizedPnL(dom.realizedPnLTable, state.computed);
-  UI_RENDERER.renderLedger(dom.ledgerTable, state.transactions, {
+  UI_RENDERER.renderLedger(dom.ledgerTable, filterTransactions(state.transactions, state.ledgerFilter), {
     onEdit: (t) => UI_RENDERER.populateForm(dom.form, t),
     onDelete: (t) => handleDelete(t, dom)
   });
@@ -245,6 +267,56 @@ function handleExport() {
   URL.revokeObjectURL(url);
 }
 
+function readFileAsText(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(reader.error);
+    reader.readAsText(file);
+  });
+}
+
+/** Validates the whole imported file — shape of every transaction AND that they replay cleanly together — before touching IndexedDB at all. */
+async function handleImport(file, dom) {
+  let parsed;
+  try {
+    const text = await readFileAsText(file);
+    parsed = JSON.parse(text);
+    if (!Array.isArray(parsed)) throw new Error('ไฟล์ต้องเป็น array ของรายการ');
+    parsed.forEach((t, i) => {
+      if (!Object.values(TRANSACTION_TYPES).includes(t.type)) {
+        throw new Error(`รายการที่ ${i + 1}: ประเภท "${t.type}" ไม่ถูกต้อง`);
+      }
+      try {
+        validateShape(t);
+      } catch (err) {
+        throw new Error(`รายการที่ ${i + 1} (${t.symbol ?? t.type}): ${err.message}`);
+      }
+    });
+    LEDGER_ENGINE.replay(parsed);
+  } catch (err) {
+    STATE_STORE.setState({ error: `Import ไม่สำเร็จ: ${err.message}` });
+    render(dom);
+    return;
+  }
+
+  const existingCount = STATE_STORE.getState().transactions.length;
+  const confirmed = window.confirm(
+    `จะแทนที่รายการเดิม ${existingCount} รายการ ด้วยรายการที่ import มา ${parsed.length} รายการ ต้องการดำเนินการต่อหรือไม่?`
+  );
+  if (!confirmed) return;
+
+  try {
+    await STORAGE_ENGINE.replaceAll(parsed);
+    await loadTransactions();
+    render(dom);
+  } catch (err) {
+    DEBUG_MODULE.error('Import failed', err);
+    STATE_STORE.setState({ error: 'Import ไม่สำเร็จ กรุณาลองใหม่' });
+    render(dom);
+  }
+}
+
 export const APP_CORE = {
   async init() {
     const dom = {
@@ -257,7 +329,14 @@ export const APP_CORE = {
       realizedPnLTable: document.getElementById('realized-pnl-table'),
       ledgerTable: document.getElementById('ledger-table'),
       feeCommissionRate: document.getElementById('fee-commission-rate'),
-      feeMinCommission: document.getElementById('fee-min-commission')
+      feeMinCommission: document.getElementById('fee-min-commission'),
+      importBtn: document.getElementById('import-json'),
+      importFileInput: document.getElementById('import-file-input'),
+      filterSymbol: document.getElementById('filter-symbol'),
+      filterType: document.getElementById('filter-type'),
+      filterDateFrom: document.getElementById('filter-date-from'),
+      filterDateTo: document.getElementById('filter-date-to'),
+      filterClearBtn: document.getElementById('filter-clear')
     };
 
     dom.form.elements.type.addEventListener('change', () => UI_RENDERER.updateFormVisibility(dom.form));
@@ -270,6 +349,35 @@ export const APP_CORE = {
       render(dom);
     });
     dom.exportBtn.addEventListener('click', handleExport);
+    dom.importBtn.addEventListener('click', () => dom.importFileInput.click());
+    dom.importFileInput.addEventListener('change', () => {
+      const file = dom.importFileInput.files[0];
+      dom.importFileInput.value = '';
+      if (file) handleImport(file, dom);
+    });
+
+    const onFilterChange = () => {
+      STATE_STORE.setState({
+        ledgerFilter: {
+          symbol: dom.filterSymbol.value,
+          type: dom.filterType.value,
+          dateFrom: dom.filterDateFrom.value,
+          dateTo: dom.filterDateTo.value
+        }
+      });
+      render(dom);
+    };
+    dom.filterSymbol.addEventListener('input', onFilterChange);
+    dom.filterType.addEventListener('change', onFilterChange);
+    dom.filterDateFrom.addEventListener('change', onFilterChange);
+    dom.filterDateTo.addEventListener('change', onFilterChange);
+    dom.filterClearBtn.addEventListener('click', () => {
+      dom.filterSymbol.value = '';
+      dom.filterType.value = 'ALL';
+      dom.filterDateFrom.value = '';
+      dom.filterDateTo.value = '';
+      onFilterChange();
+    });
 
     const initialFeeSettings = FEE_SETTINGS.get();
     dom.feeCommissionRate.value = initialFeeSettings.commissionRate;

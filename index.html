@@ -59,10 +59,12 @@
             <option value="CASH_DIVIDEND">รับปันผลเงินสด (Cash Dividend)</option>
             <option value="CASH_DEPOSIT_WITHDRAWAL">ฝาก/ถอนเงิน (Cash Deposit/Withdrawal)</option>
             <option value="MANUAL_ADJUSTMENT">ปรับยอดด้วยตนเอง (Manual Adjustment)</option>
+            <option value="STOCK_SPLIT">หุ้นแตกพาร์ (Stock Split)</option>
+            <option value="STOCK_DIVIDEND">หุ้นปันผล (Stock Dividend)</option>
           </select>
         </label>
 
-        <label data-for-types="BUY,SELL,CASH_DIVIDEND,MANUAL_ADJUSTMENT" class="flex flex-col gap-1 text-sm">
+        <label data-for-types="BUY,SELL,CASH_DIVIDEND,MANUAL_ADJUSTMENT,STOCK_SPLIT,STOCK_DIVIDEND" class="flex flex-col gap-1 text-sm">
           หุ้น (Symbol)
           <input type="text" name="symbol" class="rounded-xl border border-slate-300 px-3 py-2 uppercase" placeholder="เช่น PTT" />
         </label>
@@ -110,7 +112,17 @@
           <input type="number" name="newAverageCost" min="0" step="0.01" class="rounded-xl border border-slate-300 px-3 py-2" />
         </label>
 
-        <label data-for-types="BUY,SELL,CASH_DIVIDEND,CASH_DEPOSIT_WITHDRAWAL,MANUAL_ADJUSTMENT" class="flex flex-col gap-1 text-sm sm:col-span-2">
+        <label data-for-types="STOCK_SPLIT" class="flex flex-col gap-1 text-sm">
+          อัตราส่วนแตกพาร์ (เช่น 2 = แตกพาร์ 1:2)
+          <input type="number" name="splitRatio" min="0.01" step="0.01" class="rounded-xl border border-slate-300 px-3 py-2" />
+        </label>
+
+        <label data-for-types="STOCK_DIVIDEND" class="flex flex-col gap-1 text-sm">
+          จำนวนหุ้นที่ได้เพิ่ม (ฟรี)
+          <input type="number" name="additionalQuantity" min="1" step="1" class="rounded-xl border border-slate-300 px-3 py-2" />
+        </label>
+
+        <label data-for-types="BUY,SELL,CASH_DIVIDEND,CASH_DEPOSIT_WITHDRAWAL,MANUAL_ADJUSTMENT,STOCK_SPLIT,STOCK_DIVIDEND" class="flex flex-col gap-1 text-sm sm:col-span-2">
           หมายเหตุ (ไม่บังคับ)
           <input type="text" name="note" class="rounded-xl border border-slate-300 px-3 py-2" />
         </label>
@@ -139,10 +151,34 @@
     </section>
 
     <section class="glass rounded-2xl shadow p-5">
-      <div class="flex items-center justify-between mb-3">
+      <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
         <h2 class="font-semibold">Ledger (รายการทั้งหมด)</h2>
-        <button id="export-json" class="rounded-xl border border-slate-300 px-3 py-1.5 text-sm hover:bg-white">Export to JSON</button>
+        <div class="flex gap-2">
+          <button id="export-json" class="rounded-xl border border-slate-300 px-3 py-1.5 text-sm hover:bg-white">Export to JSON</button>
+          <button id="import-json" class="rounded-xl border border-slate-300 px-3 py-1.5 text-sm hover:bg-white">Import from JSON</button>
+          <input type="file" id="import-file-input" accept="application/json" class="hidden" />
+        </div>
       </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-4 gap-3 mb-4 text-sm">
+        <input type="text" id="filter-symbol" placeholder="กรองตามหุ้น" class="rounded-xl border border-slate-300 px-3 py-2" />
+        <select id="filter-type" class="rounded-xl border border-slate-300 px-3 py-2">
+          <option value="ALL">ทุกประเภท</option>
+          <option value="BUY">ซื้อ</option>
+          <option value="SELL">ขาย</option>
+          <option value="CASH_DIVIDEND">ปันผล</option>
+          <option value="CASH_DEPOSIT_WITHDRAWAL">ฝาก/ถอน</option>
+          <option value="MANUAL_ADJUSTMENT">ปรับยอด</option>
+          <option value="STOCK_SPLIT">แตกพาร์</option>
+          <option value="STOCK_DIVIDEND">หุ้นปันผล</option>
+        </select>
+        <input type="date" id="filter-date-from" class="rounded-xl border border-slate-300 px-3 py-2" />
+        <div class="flex gap-2">
+          <input type="date" id="filter-date-to" class="rounded-xl border border-slate-300 px-3 py-2 flex-1" />
+          <button id="filter-clear" class="rounded-xl border border-slate-300 px-3 py-2 text-slate-500 hover:bg-white">ล้าง</button>
+        </div>
+      </div>
+
       <div id="ledger-table"></div>
     </section>
   </div>

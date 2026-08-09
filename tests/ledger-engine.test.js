@@ -144,6 +144,55 @@ describe('LEDGER_ENGINE.replay — Holding via Average Cost', () => {
   });
 });
 
+describe('LEDGER_ENGINE.replay — Corporate Actions', () => {
+  it('Stock Split multiplies quantity and divides average cost, total cost basis unchanged', () => {
+    const transactions = [
+      tx({ type: TRANSACTION_TYPES.BUY, symbol: 'PTT', quantity: 100, netCashOut: 3500 }), // avg 35
+      tx({ type: TRANSACTION_TYPES.STOCK_SPLIT, symbol: 'PTT', splitRatio: 2 })
+    ];
+    const { holdings } = LEDGER_ENGINE.replay(transactions);
+    expect(holdings).toEqual([{ symbol: 'PTT', quantity: 200, averageCost: 17.5 }]);
+  });
+
+  it('Stock Split that does not divide evenly into whole shares is rejected', () => {
+    const transactions = [
+      tx({ type: TRANSACTION_TYPES.BUY, symbol: 'PTT', quantity: 100, netCashOut: 3500 }),
+      tx({ type: TRANSACTION_TYPES.STOCK_SPLIT, symbol: 'PTT', splitRatio: 1 / 3 })
+    ];
+    expect(() => LEDGER_ENGINE.replay(transactions)).toThrow(LedgerError);
+  });
+
+  it('Stock Split on a symbol with no existing Holding is rejected', () => {
+    const transactions = [tx({ type: TRANSACTION_TYPES.STOCK_SPLIT, symbol: 'PTT', splitRatio: 2 })];
+    expect(() => LEDGER_ENGINE.replay(transactions)).toThrow(LedgerError);
+  });
+
+  it('Stock Dividend adds free shares and spreads the same total cost basis over them', () => {
+    const transactions = [
+      tx({ type: TRANSACTION_TYPES.BUY, symbol: 'PTT', quantity: 100, netCashOut: 3500 }), // avg 35, total cost 3500
+      tx({ type: TRANSACTION_TYPES.STOCK_DIVIDEND, symbol: 'PTT', additionalQuantity: 10 })
+    ];
+    const { holdings } = LEDGER_ENGINE.replay(transactions);
+    expect(holdings).toEqual([{ symbol: 'PTT', quantity: 110, averageCost: 3500 / 110 }]);
+  });
+
+  it('Stock Dividend on a symbol with no existing Holding is rejected', () => {
+    const transactions = [tx({ type: TRANSACTION_TYPES.STOCK_DIVIDEND, symbol: 'PTT', additionalQuantity: 10 })];
+    expect(() => LEDGER_ENGINE.replay(transactions)).toThrow(LedgerError);
+  });
+
+  it('Buy/Sell after a Stock Split keep computing correctly off the post-split baseline', () => {
+    const transactions = [
+      tx({ type: TRANSACTION_TYPES.BUY, symbol: 'PTT', quantity: 100, netCashOut: 3500 }), // avg 35
+      tx({ type: TRANSACTION_TYPES.STOCK_SPLIT, symbol: 'PTT', splitRatio: 2 }), // 200 @ 17.5
+      tx({ type: TRANSACTION_TYPES.SELL, symbol: 'PTT', quantity: 50, netCashIn: 1000 })
+    ];
+    const { holdings, realizedPnL } = LEDGER_ENGINE.replay(transactions);
+    expect(holdings).toEqual([{ symbol: 'PTT', quantity: 150, averageCost: 17.5 }]);
+    expect(realizedPnL[0]).toMatchObject({ proceeds: 1000, costBasis: 17.5 * 50, realizedPnL: 1000 - 17.5 * 50 });
+  });
+});
+
 describe('LEDGER_ENGINE.canSell', () => {
   it('allows selling up to the held quantity, rejects more', () => {
     const holdings = [{ symbol: 'PTT', quantity: 100, averageCost: 10 }];
